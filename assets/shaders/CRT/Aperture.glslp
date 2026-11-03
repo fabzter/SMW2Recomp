@@ -1,0 +1,5 @@
+# CRT: Aperture -- libretro/glsl-shaders crt/crt-aperture.glslp
+shaders = 1
+
+shader0 = "../_libretro/crt/shaders/crt-aperture.glsl"
+filter_linear0 = false

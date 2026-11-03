@@ -1,0 +1,19 @@
+diff --git a/runner/src/desktop/host_main.c b/runner/src/desktop/host_main.c
+index 91ea98ea..58a598dd 100644
+--- a/runner/src/desktop/host_main.c
++++ b/runner/src/desktop/host_main.c
+@@ -657,6 +657,14 @@ static int RendererChoice(void) {
+   if (!want[0])
+     want = g_config.output_method == kOutputMethod_OpenGL ? "opengl" :
+            g_config.output_method == kOutputMethod_SDLSoftware ? "software" : "auto";
++  /* GLSL presets render only on the OpenGL presenter, so a chosen shader
++   * wins over the renderer choice instead of being silently ignored. */
++  if (g_game && g_game->shader_supported && g_config.shader && g_config.shader[0] &&
++      strcmp(want, "opengl")) {
++    host_report_breadcrumb("renderer '%s' -> opengl: shader '%s' needs OpenGL",
++                           want, g_config.shader);
++    want = "opengl";
++  }
+   for (int i = 0; i < g_renderer_count; ++i)
+     if (!strcmp(g_renderer_id[i], want)) return i;
+   if (strcmp(want, "auto"))

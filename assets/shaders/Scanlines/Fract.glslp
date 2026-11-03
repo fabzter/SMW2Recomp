@@ -1,0 +1,6 @@
+# Scanlines: Fract -- libretro/glsl-shaders scanlines/scanline-fract.glslp
+shaders = 1
+
+shader0 = "../_libretro/scanlines/shaders/scanline-fract.glsl"
+filter_linear0 = false
+scale_type0 = viewport

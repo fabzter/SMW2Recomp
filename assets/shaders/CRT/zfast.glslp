@@ -1,0 +1,5 @@
+# CRT: zfast -- libretro/glsl-shaders crt/zfast-crt.glslp
+shaders = 1
+
+shader0 = "../_libretro/crt/shaders/zfast_crt.glsl"
+filter_linear0 = true

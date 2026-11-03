@@ -1,0 +1,18 @@
+diff --git a/runner/src/snes/ppu.c b/runner/src/snes/ppu.c
+index 6f7fbd85..54db0bfb 100644
+--- a/runner/src/snes/ppu.c
++++ b/runner/src/snes/ppu.c
+@@ -912,6 +912,13 @@ static void PpuRunLineJob(Ppu* ppu, int line, bool pixels, bool live) {
+     ppu->timeOver = false;
+     ppu->evenFrame = !ppu->evenFrame;
+   } else {
++    /* Frame-model hosts render lines 1..224 and never pass line 0, so the
++     * mosaic table was never built and stayed all zeros: every line of a
++     * mosaic-enabled layer sampled row 0. Street Fighter II Turbo leaves BG1
++     * mosaic enabled at size 1 after its title animation, and its Mode 7
++     * logo vanished. Rebuilding is a no-op unless the size changed, so a
++     * $2106 write between lines takes effect from the next line too. */
++    PpuPrepareMosaic(ppu);
+     PpuDrawVisibleLine(ppu, line, pixels, live);
+   }
+ }

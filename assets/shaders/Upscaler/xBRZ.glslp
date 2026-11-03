@@ -1,0 +1,7 @@
+# Upscaler: xBRZ -- libretro/glsl-shaders xbrz/xbrz-freescale.glslp
+shaders = 1
+
+shader0 = "../_libretro/xbrz/shaders/xbrz-freescale.glsl"
+filter_linear0 = false
+scale_type0 = viewport
+scale0 = 1.0

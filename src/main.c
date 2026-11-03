@@ -1,5 +1,5 @@
 /*
- * Super Mario World 2 Yoshis Island — desktop host shim.
+ * Super Mario World 2: Yoshi's Island — desktop host shim.
  *
  * Identity and hooks, nothing else. The host itself is the framework's
  * (snesrecomp/runner/src/desktop/host_main.h): the pre-boot launcher, ROM
@@ -42,9 +42,74 @@
 #define SNES_GAME_VERSION "dev"
 #endif
 
+#include "config.h"
+#include "smw2_update.h"
+#include <string.h>
+
+#ifdef RECOMP_LAUNCHER
+#include "recomp_launcher.h"
+/* The host switches to OpenGL whenever a shader is selected; say so where the
+ * player picks the renderer. The update check gets its checkbox here too. */
+static void Smw2ConfigureLauncher(RecompLauncherCGameInfo *info)
+{
+    info->renderer_note = "Shaders need OpenGL: choosing one switches the renderer to OpenGL.";
+#ifdef _WIN32
+    info->host_toggle_label = "Check for updates on start";
+    info->host_toggle_help =
+        "Look for a newer release on GitHub when the game starts and offer to "
+        "install it. Saves, save states and settings are kept.";
+    info->host_toggle_get = Smw2UpdateGetEnabled;
+    info->host_toggle_set = Smw2UpdateSetEnabled;
+#endif
+}
+#endif
+
+#if defined(_WIN32) && !defined(SMW2_CONSOLE)
+#include <io.h>
+#include <stdio.h>
+#undef HIBYTE  /* the framework's types.h has its own; this file does not use it */
+#undef LOBYTE
+#include <windows.h>
+
+/* The Windows build is a window app (no console, see CMakeLists.txt). Keep the
+ * host's stdout/stderr diagnostics in <exe>.log beside the executable unless
+ * the caller already redirected them. */
+static void Smw2RedirectLogsToFile(void)
+{
+    if (GetStdHandle(STD_ERROR_HANDLE) != NULL)
+        return;
+    wchar_t path[MAX_PATH];
+    DWORD len = GetModuleFileNameW(NULL, path, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH - 4)
+        return;
+    wchar_t *dot = wcsrchr(path, L'.');
+    wcscpy_s(dot ? dot : path + len, MAX_PATH - (size_t)((dot ? dot : path + len) - path), L".log");
+    FILE *log;
+    if (_wfreopen_s(&log, path, L"w", stderr) != 0)
+        return;
+    setvbuf(stderr, NULL, _IONBF, 0);
+    if (_dup2(_fileno(stderr), 1) == 0)
+        setvbuf(stdout, NULL, _IONBF, 0);
+}
+#endif
+
+/* GLSL presets (assets/shaders) render only on the OpenGL presenter, so make
+ * it this title's default. A fresh install starts with no shader: the plain
+ * picture costs the GPU almost nothing, while a full-screen CRT preset made
+ * weaker laptops drop frames. Whatever the player picks in the launcher is
+ * saved to config.ini and left alone. */
+static void Smw2AfterConfig(void)
+{
+    if (g_config.renderer[0] == '\0') {
+        strcpy(g_config.renderer, "opengl");
+        g_config.output_method = kOutputMethod_OpenGL;
+    }
+    Smw2UpdateCheckOnStart(SNES_GAME_VERSION);
+}
+
 static const SnesDesktopHostGame kGameHost = {
-    .display_name        = "Super Mario World 2 Yoshis Island",
-    .window_title        = "Super Mario World 2 Yoshis Island",
+    .display_name        = "Super Mario World 2: Yoshi's Island",
+    .window_title        = "Super Mario World 2: Yoshi's Island",
     .region              = SNESRECOMP_ROM_REGION,
     .rom_file            = SNESRECOMP_ROM_FILE,
     .expected_sha256_hex = SNESRECOMP_ROM_EXPECTED_SHA256,
@@ -53,15 +118,35 @@ static const SnesDesktopHostGame kGameHost = {
     .build_version       = SNES_GAME_VERSION,
     .game_info           = &kGameInfo,
     .num_players         = 1,
+    .shader_supported    = 1,
+    .after_config        = Smw2AfterConfig,
+#ifdef RECOMP_LAUNCHER
+    .configure_launcher  = Smw2ConfigureLauncher,
+#endif
     /* Battery-backed SRAM shows the launcher's SAVES panel. Leave NULL for a
      * title without one. The path is exe-relative. */
     .sram_path           = "saves/save.srm",
+    /* Ctrl+L (or Select+L3) reopens the launcher mid-game; shader, scale,
+     * volume and bindings apply on RESUME without a restart. */
+    .in_game_launcher    = 1,
 };
+
+#ifdef _WIN32
+/* Laptops with switchable graphics (NVIDIA Optimus, AMD PowerXpress) run an
+ * unknown program on the integrated GPU, which cannot keep a full-screen
+ * shader at 60 fps. The drivers read these exports from the executable and
+ * pick the discrete GPU instead. */
+__declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#endif
 
 #ifndef __ANDROID__
 #undef main   /* desktop: keep plain main() even if SDL_main.h remapped it */
 #endif
 int main(int argc, char **argv)
 {
+#if defined(_WIN32) && !defined(SMW2_CONSOLE)
+    Smw2RedirectLogsToFile();
+#endif
     return snesrecomp_desktop_main(&kGameHost, argc, argv);
 }

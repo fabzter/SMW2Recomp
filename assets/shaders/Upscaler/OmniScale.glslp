@@ -1,0 +1,7 @@
+# Upscaler: OmniScale -- libretro/glsl-shaders omniscale/omniscale.glslp
+shaders = 1
+
+shader0 = "../_libretro/omniscale/shaders/omniscale.glsl"
+scale_type0 = source
+filter_linear0 = false
+scale0 = 10.0

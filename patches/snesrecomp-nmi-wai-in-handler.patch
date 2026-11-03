@@ -1,0 +1,23 @@
+diff --git a/runner/src/snes/interp_bridge.c b/runner/src/snes/interp_bridge.c
+index 27dd0ea3..06d8b573 100644
+--- a/runner/src/snes/interp_bridge.c
++++ b/runner/src/snes/interp_bridge.c
+@@ -2824,10 +2824,16 @@ static int _interp_run_core(CpuState *cpu, uint32_t entry_pc24,
+          * Exception: a handler that discarded its own interrupt frame
+          * (handler_frame_discarded) has become the main loop -- Rare's DKC
+          * engine resets S and jumps to its `WAI / BRA` idle loop from NMI.
+-         * That WAI is the frame boundary. */
++         * That WAI is the frame boundary.
++         * Any other WAI inside a host-invoked handler halts the same way: the
++         * frame driver parks it and delivers the next NMI on top, as hardware
++         * does. Donkey Kong Country's Candy save ends in `WAI / BRA` at
++         * $80:E90D while still inside NMI with a stack the discard test above
++         * does not recognise; looped to the step cap instead, the game never
++         * reached the next NMI and the screen stayed black after saving. */
+         if (in.waiting) {
+             in.waiting = false;
+-            if (auto_quiescent || yield_pc || handler_frame_discarded) {
++            if (auto_quiescent || yield_pc || handler_frame_discarded || stop_on_rti) {
+                 lle_resume_set(((uint32_t)in.k << 16) | in.pc, INTERP_RESUME_SITE_WAI, in.sp);
+                 s_lle_wai_yield = 1;
+                 sync_interp_to_cpu(&in, cpu);

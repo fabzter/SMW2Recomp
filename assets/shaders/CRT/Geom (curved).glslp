@@ -1,0 +1,5 @@
+# CRT: Geom (curved) -- libretro/glsl-shaders crt/crt-geom.glslp
+shaders = 1
+
+shader0 = "../_libretro/crt/shaders/crt-geom.glsl"
+filter_linear0 = false

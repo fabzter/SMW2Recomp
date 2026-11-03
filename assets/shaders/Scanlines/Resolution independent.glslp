@@ -1,0 +1,6 @@
+# Scanlines: Resolution independent -- libretro/glsl-shaders scanlines/res-independent-scanlines.glslp
+shaders = 1
+
+shader0 = "../_libretro/scanlines/shaders/res-independent-scanlines.glsl"
+filter_linear0 = false
+scale_type0 = viewport

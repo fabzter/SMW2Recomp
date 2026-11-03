@@ -1,0 +1,6 @@
+# Scanlines: GDV mini -- libretro/glsl-shaders scanlines/gdv-mini-scanlines.glslp
+shaders = 1
+
+shader0 = "../_libretro/scanlines/shaders/gdv-mini-scanlines.glsl"
+filter_linear0 = false
+scale_type0 = viewport

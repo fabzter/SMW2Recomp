@@ -1,0 +1,5 @@
+# CRT: Easymode -- libretro/glsl-shaders crt/crt-easymode.glslp
+shaders = 1
+
+shader0 = "../_libretro/crt/shaders/crt-easymode.glsl"
+filter_linear0 = false

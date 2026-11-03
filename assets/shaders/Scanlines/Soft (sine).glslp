@@ -1,0 +1,6 @@
+# Scanlines: Soft (sine) -- libretro/glsl-shaders scanlines/scanlines-sine-abs.glslp
+shaders = 1
+
+shader0 = "../_libretro/scanlines/shaders/scanlines-sine-abs.glsl"
+filter_linear0 = false
+scale_type0 = viewport

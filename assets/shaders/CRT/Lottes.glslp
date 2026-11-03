@@ -1,0 +1,5 @@
+# CRT: Lottes -- libretro/glsl-shaders crt/crt-lottes.glslp
+shaders = 1
+
+shader0 = "../_libretro/crt/shaders/crt-lottes.glsl"
+filter_linear0 = false

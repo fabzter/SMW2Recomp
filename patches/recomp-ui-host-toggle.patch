@@ -1,0 +1,76 @@
+diff --git a/src/common/backends/imgui/launcher_imgui.cpp b/src/common/backends/imgui/launcher_imgui.cpp
+index 5143884..7f9f70a 100644
+--- a/src/common/backends/imgui/launcher_imgui.cpp
++++ b/src/common/backends/imgui/launcher_imgui.cpp
+@@ -12757,6 +12757,16 @@ void draw_footer(LauncherModel* m, const LauncherTheme& th, float footer_h) {
+         ImGui::SetCursorScreenPos(ImVec2(origin.x, cta_y + (play_h - ImGui::GetFrameHeight()) * 0.5f));
+         if (ImGui::Checkbox(ui_text("Skip launcher on boot"), &skip))
+             launcher_model_request_skip_toggle(m);
++        // The host-owned checkbox (GameInfo.host_toggle_*) sits beside it. The
++        // value is the host's: read on every draw, written back on change.
++        if (m->host_toggle_get && m->host_toggle_label) {
++            ImGui::SameLine(0.0f, px(28.0f));
++            bool host = m->host_toggle_get() != 0;
++            if (ImGui::Checkbox(ui_text(m->host_toggle_label), &host) && m->host_toggle_set)
++                m->host_toggle_set(host ? 1 : 0);
++            if (m->host_toggle_help && m->host_toggle_help[0] && ImGui::IsItemHovered())
++                ImGui::SetTooltip("%s", m->host_toggle_help);
++        }
+     } else if (m->view == LNG_VIEW_SETTINGS &&
+                launcher_model_can_restore_defaults(m)) {
+         ImGui::SetCursorScreenPos(
+diff --git a/src/common/launcher_model.c b/src/common/launcher_model.c
+index 44ac872..7697d51 100644
+--- a/src/common/launcher_model.c
++++ b/src/common/launcher_model.c
+@@ -589,6 +589,10 @@ void launcher_model_init(LauncherModel* m,
+         m->has_gyro_controls    = game->has_gyro_controls != 0;
+         m->has_sharp_filter     = game->has_sharp_filter != 0;
+         m->has_affine_filter    = game->has_affine_filter != 0;
++        m->host_toggle_label    = game->host_toggle_label;
++        m->host_toggle_help     = game->host_toggle_help;
++        m->host_toggle_get      = game->host_toggle_get;
++        m->host_toggle_set      = game->host_toggle_set;
+         m->has_frame_blend      = game->has_frame_blend != 0;
+         m->has_run_ahead        = game->has_run_ahead != 0;
+         m->has_shader           = game->has_shader != 0;
+diff --git a/src/common/launcher_model.h b/src/common/launcher_model.h
+index 826ced7..2a92efd 100644
+--- a/src/common/launcher_model.h
++++ b/src/common/launcher_model.h
+@@ -366,6 +366,12 @@ typedef struct {
+     bool has_gyro_controls;
+     bool has_sharp_filter;
+     bool has_affine_filter;
++    // Borrowed from GameInfo.host_toggle_*: one host-owned checkbox beside
++    // "Skip launcher on boot". The value lives in the host; NULL get => none.
++    const char* host_toggle_label;
++    const char* host_toggle_help;
++    int (*host_toggle_get)(void);
++    void (*host_toggle_set)(int value);
+     bool has_frame_blend;
+     bool has_run_ahead;
+     bool has_shader;
+diff --git a/src/recomp_launcher.h b/src/recomp_launcher.h
+index 1611349..bf8029c 100644
+--- a/src/recomp_launcher.h
++++ b/src/recomp_launcher.h
+@@ -2442,6 +2442,18 @@ typedef struct RecompLauncherCGameInfo {
+      * Image Filtering mod) sets this so no control that nothing applies is
+      * drawn. Appended for ABI stability; zero keeps the row. */
+     int                linear_filter_hidden;
++
++    /* One host-owned checkbox drawn on the dashboard footer beside "Skip
++     * launcher on boot", for a title preference the launcher has no field for
++     * (e.g. "Check for updates on start"). The host keeps and persists the
++     * value: the launcher
++     * reads host_toggle_get() when it draws and calls host_toggle_set() on
++     * every change. NULL host_toggle_get => no row. host_toggle_help is the
++     * hover text; NULL => none. Appended for ABI stability. */
++    const char*        host_toggle_label;
++    const char*        host_toggle_help;
++    int              (*host_toggle_get)(void);
++    void             (*host_toggle_set)(int value);
+ } RecompLauncherCGameInfo;
+ /* RecompLauncherCGameInfo carries linear_filter_hidden. */
+ #define RECOMP_LAUNCHER_HAS_LINEAR_FILTER_HIDDEN 1
