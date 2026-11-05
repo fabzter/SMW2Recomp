@@ -108,6 +108,7 @@ git -C snesrecomp apply ../patches/snesrecomp-mosaic-frame-model.patch
 git -C snesrecomp apply ../patches/snesrecomp-nmi-idle-loop-wai.patch
 git -C snesrecomp apply ../patches/snesrecomp-nmi-wai-in-handler.patch
 git -C snesrecomp apply ../patches/snesrecomp-raster-oam-and-hdma.patch
+git -C snesrecomp apply ../patches/snesrecomp-raster-vram-journal.patch
 git -C snesrecomp apply ../patches/snesrecomp-shader-forces-opengl.patch
 git -C recomp-ui apply ../patches/recomp-ui-host-toggle.patch
 ```
@@ -115,12 +116,27 @@ git -C recomp-ui apply ../patches/recomp-ui-host-toggle.patch
 `snesrecomp-raster-oam-and-hdma.patch` is the renderer fix shared with the
 other ports: per-line sprite tables, HDMA set up in vblank, and vblank writes
 kept in their own field. It also counts HDMA's first transfer, made in V=0's
-H-blank, as a table line, as the hardware does. In this port the per-line
-sprite table is used only for a screen split, a table rewritten before line
-200: Yoshi's Island uploads Yoshi's tiles and his sprite table together at
-line 221, and since the renderer always draws with the newest tiles, drawing
-the field with the older table mixed two animation frames (extra heads and
-stray body parts whenever Yoshi moved).
+H-blank, as a table line, as the hardware does. Yoshi's Island uploads
+Yoshi's tiles and his sprite table together at line 221; in 0.1.0 the
+renderer drew every line with the newest tiles, so the per-line sprite table
+was limited to screen splits (with the older table under the new tiles, Yoshi
+showed extra heads). Since 0.1.1 the tiles are journaled too (below), and the
+table and tiles of each line come from the same moment.
+
+`snesrecomp-raster-vram-journal.patch` makes the renderer draw each line with
+the video memory, palettes and sprite table it had on hardware. The renderer
+runs after the CPU half of a frame, so a write made while the picture is
+drawn (in forced blank at the bottom of the screen) used to reach every line
+of that frame; it is now journaled and replayed from its own line, and writes
+made by the next frame's NMI before the render are kept out. It also reads
+BG mode 2's offset-per-tile rows at BG3VOFS and BG3VOFS+8 (the code read
+BG3VOFS-1 and +7, a row off when BG3VOFS is a multiple of 8) and drops a +1
+on the vertical offset, as bsnes does. Both showed in World 1-7: the stage
+was assembled from the wrong rows, then shook 8 pixels back and forth while
+Yoshi walked, because the next frame's offset table, uploaded at line 217,
+was drawn under this frame's fine scroll. With video memory journaled, the
+per-line sprite table of `snesrecomp-raster-oam-and-hdma.patch` applies to
+every frame that rewrites it again.
 
 `snesrecomp-mosaic-frame-model.patch` builds the mosaic table on every visible
 line. The optimized renderer built it only on line 0, which frame-model hosts

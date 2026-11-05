@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1 — 2026-11-05
+
+World 1-7 (Touch Fuzzy, Get Dizzy) is drawn right. Its stage uses BG mode 2,
+where a table in BG3 sets the scroll of each column of the stage layer, and
+the renderer read that table one row off: the stage was put together from the
+wrong rows of its map. Once that was fixed, the stage shook while Yoshi walked,
+one frame forward and one back: the game uploads the next frame's table at the
+bottom of the screen, and the renderer drew the whole frame with it. Video
+memory, palettes and sprites written while the picture is drawn now reach only
+the lines below the write, as on the console. Saves and save states from 0.1.0
+keep working.
+
 ## 0.1.0 — 2026-11-03
 
 First release: a setup pack that recompiles the game from your own ROM. Boots
