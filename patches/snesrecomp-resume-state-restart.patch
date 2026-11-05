@@ -1,0 +1,93 @@
+diff --git a/runner/src/beam_frame_driver.c b/runner/src/beam_frame_driver.c
+index f667e798..7c7891d7 100644
+--- a/runner/src/beam_frame_driver.c
++++ b/runner/src/beam_frame_driver.c
+@@ -115,6 +115,15 @@ static void run_interrupt(uint32_t vector, uint64_t deadline) {
+ }
+ 
+ void snes_beam_frame_driver_run_frame(void) {
++  /* The interpreter's resume point is part of a save state (the rollback
++   * residue); this driver's copy is not. After a state load -- above all one
++   * made before the first frame, as when the in-game launcher restarts the
++   * game to apply a renderer change and resumes from resume.sav -- this copy
++   * still held 0, so the frame "booted" from the reset vector over the loaded
++   * state and the game started again from power-on. Between frames the two
++   * are equal (update_resume_pc), so taking the interpreter's value here only
++   * changes a frame that follows a load. */
++  update_resume_pc();
+   const bool booting = s_resume_pc == 0;
+   int slices = 0;
+   uint64_t frame_end;
+diff --git a/runner/src/desktop/host_main.c b/runner/src/desktop/host_main.c
+index 418294c0..f0cd5dee 100644
+--- a/runner/src/desktop/host_main.c
++++ b/runner/src/desktop/host_main.c
+@@ -52,6 +52,50 @@
+ #include "types.h"
+ #include "common_rtl.h"
+ #include "cpu_state.h"
++
++/* resume.sav, the in-game launcher's one-shot restart point, in the rollback
++ * format: the guest blob plus the execution residue (CPU registers, the
++ * interpreter's resume point, beam and APU pacing). A save state holds only
++ * the guest blob -- a load in a running session keeps the session's own CPU
++ * position, the game's idle loop, and that is why it works -- but the restart
++ * loads before the first frame, when there is no session: the frame driver
++ * booted from the reset vector over the state, and with only the resume point
++ * put back the CPU came up in emulation mode and ran off into BRKs (black
++ * picture over the stage's music). The file is written and read by the same
++ * executable and deleted once loaded; save-state slots keep their format, so
++ * every state a player already has keeps loading. */
++static bool SaveResumeState(const char *path) {
++  size_t cap = RtlRollbackSnapshotBound();
++  void *buf = cap ? malloc(cap) : NULL;
++  size_t n = buf ? RtlRollbackSaveToMemory(buf, cap) : 0;
++  bool ok = false;
++  if (n) {
++    FILE *f = fopen(path, "wb");
++    if (f) {
++      ok = fwrite(buf, 1, n, f) == n;
++      if (fclose(f)) ok = false;
++    }
++  }
++  free(buf);
++  return ok;
++}
++
++static bool LoadResumeState(const char *path) {
++  FILE *f = fopen(path, "rb");
++  if (!f) return false;
++  bool ok = false;
++  if (!fseek(f, 0, SEEK_END)) {
++    long end = ftell(f);
++    if (end > 0 && !fseek(f, 0, SEEK_SET)) {
++      void *buf = malloc((size_t)end);
++      if (buf && fread(buf, 1, (size_t)end, f) == (size_t)end)
++        ok = RtlRollbackLoadFromMemory(buf, (size_t)end);
++      free(buf);
++    }
++  }
++  fclose(f);
++  return ok;
++}
+ #include "cpu_trace.h"
+ #include "common_cpu_infra.h"
+ #include "snes/tier2_capture.h"
+@@ -3252,7 +3296,7 @@ static void RunInGameLauncher(bool *running, const char **exit_reason) {
+       if (same_rom &&
+           snesrecomp_abspath("saves/resume.sav", g_relaunch.state,
+                              sizeof(g_relaunch.state))) {
+-        g_relaunch.with_state = RtlSaveSnapshot(g_relaunch.state);
++        g_relaunch.with_state = SaveResumeState(g_relaunch.state);
+       }
+       if (same_rom && !g_relaunch.with_state) {
+         /* Restarting now would throw the player's progress away. The edit is
+@@ -3995,7 +4039,7 @@ error_reading:;
+    * setting a live session cannot take, and saved the moment it left. The
+    * file is one-shot -- a later plain launch must not resume it again. */
+   if (args.resume_state) {
+-    bool resumed = RtlLoadSnapshot(args.resume_state);
++    bool resumed = LoadResumeState(args.resume_state);
+     if (resumed) GameReset();
+     host_report_breadcrumb("resume state %s: %s", resumed ? "loaded" : "FAILED to load (kept)",
+                            args.resume_state);

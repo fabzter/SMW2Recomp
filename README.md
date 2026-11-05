@@ -109,6 +109,7 @@ git -C snesrecomp apply ../patches/snesrecomp-nmi-idle-loop-wai.patch
 git -C snesrecomp apply ../patches/snesrecomp-nmi-wai-in-handler.patch
 git -C snesrecomp apply ../patches/snesrecomp-raster-oam-and-hdma.patch
 git -C snesrecomp apply ../patches/snesrecomp-raster-vram-journal.patch
+git -C snesrecomp apply ../patches/snesrecomp-resume-state-restart.patch
 git -C snesrecomp apply ../patches/snesrecomp-shader-forces-opengl.patch
 git -C recomp-ui apply ../patches/recomp-ui-host-toggle.patch
 ```
@@ -137,6 +138,16 @@ Yoshi walked, because the next frame's offset table, uploaded at line 217,
 was drawn under this frame's fine scroll. With video memory journaled, the
 per-line sprite table of `snesrecomp-raster-oam-and-hdma.patch` applies to
 every frame that rewrites it again.
+
+`snesrecomp-resume-state-restart.patch` makes a setting that needs a restart
+come back to the same moment. The in-game launcher saves `savesesume.sav`,
+restarts and loads it before the first frame, when no session exists yet. A
+save state holds the machine but not the CPU half's registers or resume
+point (a load during play keeps the session's own, the game's idle loop), so
+the frame driver booted from the reset vector over it. The restart file is
+now written in the rollback format (machine plus execution residue), and the
+frame driver takes the interpreter's resume point at the start of a frame.
+Save-state slots keep their format.
 
 `snesrecomp-mosaic-frame-model.patch` builds the mosaic table on every visible
 line. The optimized renderer built it only on line 0, which frame-model hosts

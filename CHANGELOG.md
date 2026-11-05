@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2 — 2026-11-05
+
+Changing a setting during play no longer sends the game back to the start.
+A few settings (renderer, audio output and rate, mods) need the game to
+restart; it saves the moment it leaves to `savesesume.sav` and comes back
+to it, but it came back without the CPU's registers and resume point, so it
+booted from power-on (or, with only half the state back, showed a black
+picture over the stage's music). That one-shot file now holds the whole
+machine and is deleted once loaded; your save states and in-game saves are
+not touched, and every one made by 0.1.0 or 0.1.1 keeps loading.
+
 ## 0.1.1 — 2026-11-05
 
 World 1-7 (Touch Fuzzy, Get Dizzy) is drawn right. Its stage uses BG mode 2,
