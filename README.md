@@ -140,7 +140,7 @@ per-line sprite table of `snesrecomp-raster-oam-and-hdma.patch` applies to
 every frame that rewrites it again.
 
 `snesrecomp-resume-state-restart.patch` makes a setting that needs a restart
-come back to the same moment. The in-game launcher saves `savesesume.sav`,
+come back to the same moment. The in-game launcher saves `saves\resume.sav`,
 restarts and loads it before the first frame, when no session exists yet. A
 save state holds the machine but not the CPU half's registers or resume
 point (a load during play keeps the session's own, the game's idle loop), so
