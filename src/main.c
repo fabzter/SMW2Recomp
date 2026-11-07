@@ -25,9 +25,9 @@
  * complete list of hooks and what each is for.
  */
 
-#include "host_main.h"
 #include "game_rtl.h"
-#include "snesrecomp_rom_identity.h"  /* generated from rom_identity.txt */
+#include "host_main.h"
+#include "snesrecomp_rom_identity.h" /* generated from rom_identity.txt */
 
 #ifndef __ANDROID__
 #define SDL_MAIN_HANDLED 1
@@ -47,19 +47,33 @@
 #include <string.h>
 
 #ifdef RECOMP_LAUNCHER
+#include "host_paths.h"
 #include "recomp_launcher.h"
-/* The host switches to OpenGL whenever a shader is selected; say so where the
- * player picks the renderer. The update check gets its checkbox here too. */
-static void Smw2ConfigureLauncher(RecompLauncherCGameInfo *info)
-{
-    info->renderer_note = "Shaders need OpenGL: choosing one switches the renderer to OpenGL.";
+#include <sys/stat.h>
+/* ROM patches (.ips/.ips32/.bps): the launcher applies them to the verified
+ * stock image and boots the patched copy. This build runs ~100% interpreted,
+ * so patched guest code actually executes (recompiled banks would bypass it).
+ * The cache dir holds the prepared image per (source sha1, patch sha1); it
+ * must exist and live beside the exe with the rest of the mod data. */
+static void Smw2ConfigureLauncher(RecompLauncherCGameInfo *info) {
+  info->renderer_note =
+      "Shaders need OpenGL: choosing one switches the renderer to OpenGL.";
+  static char s_patch_cache[1024];
+  if (!s_patch_cache[0]) {
+    if (!snesrecomp_exe_dir_path("mods/rom-patches", s_patch_cache,
+                                 sizeof(s_patch_cache)))
+      snprintf(s_patch_cache, sizeof(s_patch_cache), "mods/rom-patches");
+    mkdir(s_patch_cache, 0777);
+  }
+  info->rom_patch_supported = 1;
+  info->rom_patch_cache_dir = s_patch_cache;
 #ifdef _WIN32
-    info->host_toggle_label = "Check for updates on start";
-    info->host_toggle_help =
-        "Look for a newer release on GitHub when the game starts and offer to "
-        "install it. Saves, save states and settings are kept.";
-    info->host_toggle_get = Smw2UpdateGetEnabled;
-    info->host_toggle_set = Smw2UpdateSetEnabled;
+  info->host_toggle_label = "Check for updates on start";
+  info->host_toggle_help =
+      "Look for a newer release on GitHub when the game starts and offer to "
+      "install it. Saves, save states and settings are kept.";
+  info->host_toggle_get = Smw2UpdateGetEnabled;
+  info->host_toggle_set = Smw2UpdateSetEnabled;
 #endif
 }
 #endif
@@ -67,29 +81,30 @@ static void Smw2ConfigureLauncher(RecompLauncherCGameInfo *info)
 #if defined(_WIN32) && !defined(SMW2_CONSOLE)
 #include <io.h>
 #include <stdio.h>
-#undef HIBYTE  /* the framework's types.h has its own; this file does not use it */
+#undef HIBYTE /* the framework's types.h has its own; this file does not use   \
+                 it */
 #undef LOBYTE
 #include <windows.h>
 
 /* The Windows build is a window app (no console, see CMakeLists.txt). Keep the
  * host's stdout/stderr diagnostics in <exe>.log beside the executable unless
  * the caller already redirected them. */
-static void Smw2RedirectLogsToFile(void)
-{
-    if (GetStdHandle(STD_ERROR_HANDLE) != NULL)
-        return;
-    wchar_t path[MAX_PATH];
-    DWORD len = GetModuleFileNameW(NULL, path, MAX_PATH);
-    if (len == 0 || len >= MAX_PATH - 4)
-        return;
-    wchar_t *dot = wcsrchr(path, L'.');
-    wcscpy_s(dot ? dot : path + len, MAX_PATH - (size_t)((dot ? dot : path + len) - path), L".log");
-    FILE *log;
-    if (_wfreopen_s(&log, path, L"w", stderr) != 0)
-        return;
-    setvbuf(stderr, NULL, _IONBF, 0);
-    if (_dup2(_fileno(stderr), 1) == 0)
-        setvbuf(stdout, NULL, _IONBF, 0);
+static void Smw2RedirectLogsToFile(void) {
+  if (GetStdHandle(STD_ERROR_HANDLE) != NULL)
+    return;
+  wchar_t path[MAX_PATH];
+  DWORD len = GetModuleFileNameW(NULL, path, MAX_PATH);
+  if (len == 0 || len >= MAX_PATH - 4)
+    return;
+  wchar_t *dot = wcsrchr(path, L'.');
+  wcscpy_s(dot ? dot : path + len,
+           MAX_PATH - (size_t)((dot ? dot : path + len) - path), L".log");
+  FILE *log;
+  if (_wfreopen_s(&log, path, L"w", stderr) != 0)
+    return;
+  setvbuf(stderr, NULL, _IONBF, 0);
+  if (_dup2(_fileno(stderr), 1) == 0)
+    setvbuf(stdout, NULL, _IONBF, 0);
 }
 #endif
 
@@ -98,37 +113,36 @@ static void Smw2RedirectLogsToFile(void)
  * picture costs the GPU almost nothing, while a full-screen CRT preset made
  * weaker laptops drop frames. Whatever the player picks in the launcher is
  * saved to config.ini and left alone. */
-static void Smw2AfterConfig(void)
-{
-    if (g_config.renderer[0] == '\0') {
-        strcpy(g_config.renderer, "opengl");
-        g_config.output_method = kOutputMethod_OpenGL;
-    }
-    Smw2UpdateCheckOnStart(SNES_GAME_VERSION);
+static void Smw2AfterConfig(void) {
+  if (g_config.renderer[0] == '\0') {
+    strcpy(g_config.renderer, "opengl");
+    g_config.output_method = kOutputMethod_OpenGL;
+  }
+  Smw2UpdateCheckOnStart(SNES_GAME_VERSION);
 }
 
 static const SnesDesktopHostGame kGameHost = {
-    .display_name        = "Super Mario World 2: Yoshi's Island",
-    .window_title        = "Super Mario World 2: Yoshi's Island",
-    .region              = SNESRECOMP_ROM_REGION,
-    .rom_file            = SNESRECOMP_ROM_FILE,
+    .display_name = "Super Mario World 2: Yoshi's Island",
+    .window_title = "Super Mario World 2: Yoshi's Island",
+    .region = SNESRECOMP_ROM_REGION,
+    .rom_file = SNESRECOMP_ROM_FILE,
     .expected_sha256_hex = SNESRECOMP_ROM_EXPECTED_SHA256,
-    .expected_crc32_hex  = SNESRECOMP_ROM_EXPECTED_CRC32,
-    .game_id             = SNESRECOMP_ROM_GAME_ID,
-    .build_version       = SNES_GAME_VERSION,
-    .game_info           = &kGameInfo,
-    .num_players         = 1,
-    .shader_supported    = 1,
-    .after_config        = Smw2AfterConfig,
+    .expected_crc32_hex = SNESRECOMP_ROM_EXPECTED_CRC32,
+    .game_id = SNESRECOMP_ROM_GAME_ID,
+    .build_version = SNES_GAME_VERSION,
+    .game_info = &kGameInfo,
+    .num_players = 1,
+    .shader_supported = 1,
+    .after_config = Smw2AfterConfig,
 #ifdef RECOMP_LAUNCHER
-    .configure_launcher  = Smw2ConfigureLauncher,
+    .configure_launcher = Smw2ConfigureLauncher,
 #endif
     /* Battery-backed SRAM shows the launcher's SAVES panel. Leave NULL for a
      * title without one. The path is exe-relative. */
-    .sram_path           = "saves/save.srm",
+    .sram_path = "saves/save.srm",
     /* Ctrl+L (or Select+L3) reopens the launcher mid-game; shader, scale,
      * volume and bindings apply on RESUME without a restart. */
-    .in_game_launcher    = 1,
+    .in_game_launcher = 1,
 };
 
 #ifdef _WIN32
@@ -141,12 +155,11 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #endif
 
 #ifndef __ANDROID__
-#undef main   /* desktop: keep plain main() even if SDL_main.h remapped it */
+#undef main /* desktop: keep plain main() even if SDL_main.h remapped it */
 #endif
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 #if defined(_WIN32) && !defined(SMW2_CONSOLE)
-    Smw2RedirectLogsToFile();
+  Smw2RedirectLogsToFile();
 #endif
-    return snesrecomp_desktop_main(&kGameHost, argc, argv);
+  return snesrecomp_desktop_main(&kGameHost, argc, argv);
 }
