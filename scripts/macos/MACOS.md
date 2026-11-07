@@ -49,6 +49,26 @@ Launching with no ROM argument opens the launcher ROM picker. Runtime files
 (`config.ini`, `keybinds.ini`, `rom.cfg`, saves, staged assets) are anchored to
 the executable directory, `build-macos/`.
 
+## Optional: double-clickable `.app`
+
+The build pipeline deliberately produces a bare executable. If you want a
+Finder-launchable bundle instead, `scripts/macos/package-app.sh` wraps the
+build tree's exe and its staged sidecars (assets, mods, shader presets) into
+`dist/Yoshi's Island Recomp.app` with an `Info.plist` and an ad-hoc code
+signature:
+
+```sh
+scripts/macos/package-app.sh            # build-macos -> dist/
+scripts/macos/package-app.sh build-macos out   # custom dirs
+open "dist/Yoshi's Island Recomp.app"
+```
+
+Per-machine state (`rom.cfg`, `config.ini`, `keybinds.ini`, saves, logs, ROMs)
+is never bundled; the app writes its own beside the exe on first run. It is a
+packaging convenience only — everything above about the plain binary still
+applies, and bundling is unsigned/ad-hoc.
+
+
 ## macOS quirks
 
 - `tools/regen.sh` worked with the verified CloudStorage ROM path; no macOS-only
