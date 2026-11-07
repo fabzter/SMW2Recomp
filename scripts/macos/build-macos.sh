@@ -110,11 +110,29 @@ echo "[3/4] Regenerating game sources"
 bash tools/regen.sh ${regen_args[@]+"${regen_args[@]}"}
 
 echo "[4/4] Configuring and building arm64 macOS binary"
+# Perf flags beyond the framework's portable defaults:
+#  - IPO/LTO: the interpreter's hot loop + bus helpers are spread across TUs;
+#    cross-module inlining is the single biggest free win on a 100% LLE build.
+#  - INTERP_READ_IMPL=FUSED: this port runs ~100% interpreted (the AOT manifest
+#    covers only the IRQ vector), so the double ROM-map decode the REFERENCE
+#    path does per fetch is pure tax. FUSED is the same mapping, decoded once.
+#  - SUPERFX_IDLE_IMPL=NATIVE: Yoshi's Island's GSU parks between tile uploads;
+#    the LLE path advances its halted clock per-cycle. NATIVE retires idle
+#    credit in bulk. Both alternates keep semantics; SNESRECOMP_FORCE_FLOOR=1
+#    at runtime returns to the faithful paths if a regression is suspected.
+#  - -mcpu=native: this box is Apple M2 Pro; baseline armv8.0 leaves usable
+#    codegen on the table. Non-portable to other machines by intent -- the
+#    binary already says "build locally".
 cmake -S . -B build-macos -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_DISABLE_FIND_PACKAGE_SDL3=TRUE \
     -DSNESRECOMP_SDL3_FETCH=ON \
     -DCMAKE_DISABLE_FIND_PACKAGE_Freetype=TRUE \
-    -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=TRUE
+    -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=TRUE \
+    -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
+    -DSNESRECOMP_INTERP_READ_IMPL=FUSED \
+    -DSNESRECOMP_SUPERFX_IDLE_IMPL=NATIVE \
+    -DCMAKE_C_FLAGS_RELEASE="-O3 -DNDEBUG -mcpu=native" \
+    -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -mcpu=native"
 cmake --build build-macos --parallel
 
 echo "Build complete: $repo_root/build-macos/SuperMarioWorld2YoshisIslandSNESRecomp"

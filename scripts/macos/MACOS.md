@@ -78,6 +78,28 @@ is never bundled; the app writes its own beside the exe on first run. It is a
 packaging convenience only — everything above about the plain binary still
 applies, and bundling is unsigned/ad-hoc.
 
+## Performance notes (measured on Apple M2 Pro)
+
+- The build is **~100% interpreted**: this port's recompilation manifest
+  covers only the IRQ vector, so nearly every guest opcode goes through the
+  LakeSnes interpreter tier (`build-macos/last_run_report.json` →
+  `execution_share` shows the interp/AOT split). Normal for this port's
+  bring-up state, not a misconfiguration.
+- `build-macos.sh` therefore configures: `INTERPROCEDURAL_OPTIMIZATION`
+  (thin LTO — the interpreter loop + bus helpers live in separate TUs),
+  `SNESRECOMP_INTERP_READ_IMPL=FUSED` (one ROM-map decode per fetch, not two),
+  `SNESRECOMP_SUPERFX_IDLE_IMPL=NATIVE` (bulk idle-credit retire for Yoshi's
+  parked GSU), and `-mcpu=native`. Measured: guest frame cost ~4.7 → ~4.0 ms
+  median. Suspect a regression? Launch with `SNESRECOMP_FORCE_FLOOR=1` to get
+  the faithful reference paths back at runtime.
+- **Input latency**: `RunAhead = 1` in `config.ini` `[General]` (set in the
+  installed .app). Speculates one extra frame and shows it, hiding ~16.6 ms
+  of the game's own input latency at ~2 ms/frame cost — inside budget.
+- FPS readout: press `f` (config `DisplayPerf`). Expect 60–61 on a 60 Hz panel.
+- Frame pacing: SDL_Delay deadline loop + GL vsync (interval 1). A missed
+  present costs one vsync; a `SNESRECOMP_FRAME_TIMING=<csv>` capture shows
+  the ~11 ms vsync block inside `present_ms`.
+
 
 ## macOS quirks
 
