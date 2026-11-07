@@ -200,6 +200,10 @@ bash tools/regen.sh --rom "/path/to/Super Mario World 2 - Yoshi's Island (USA).s
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
+**macOS:** `scripts/macos/build-macos.sh --rom "<rom path>"` reproduces the whole
+pipeline (submodules, patches, regen, configure, build) into `build-macos/`.
+See [scripts/macos/MACOS.md](scripts/macos/MACOS.md) for prerequisites and
+quirks.
 
 The ROM does not have to live in the repository — keeping it on your own
 drive is the better habit, and `SNESRECOMP_ROM` sets the path once for a
