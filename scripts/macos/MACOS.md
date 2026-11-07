@@ -58,10 +58,20 @@ build tree's exe and its staged sidecars (assets, mods, shader presets) into
 signature:
 
 ```sh
-scripts/macos/package-app.sh            # build-macos -> dist/
-scripts/macos/package-app.sh build-macos out   # custom dirs
-open "dist/Yoshi's Island Recomp.app"
+scripts/macos/package-app.sh                  # build-macos -> dist/
+scripts/macos/package-app.sh build-macos out  # custom dirs
+scripts/macos/package-app.sh build-macos dist --install   # copy into ~/Applications
+open "dist/Yoshi's Island Recomp.app"         # or: open ~/Applications/"Yoshi's Island Recomp.app"
 ```
+
+`--install` copies the bundle to `~/Applications/<APP_NAME>.app`, replacing any
+older copy, so it shows up in Launchpad/Finder like any other app. The bundle
+starts clean: on first run use **Browse For ROM** once (or hand it your
+`rom.cfg` line) — the picker caches the path in `rom.cfg` beside the exe inside
+the bundle, so later launches open straight onto the verified ROM.
+
+If you move the app, the `rom.cfg` inside it keeps working as long as the ROM
+file itself doesn't move — it stores an absolute path.
 
 Per-machine state (`rom.cfg`, `config.ini`, `keybinds.ini`, saves, logs, ROMs)
 is never bundled; the app writes its own beside the exe on first run. It is a

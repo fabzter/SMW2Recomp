@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Package the macOS build into a double-clickable .app bundle.
 #
-# Usage:  scripts/macos/package-app.sh [BUILD_DIR] [OUT_DIR]
-#   BUILD_DIR  cmake build tree containing the executable (default: build-macos)
-#   OUT_DIR    where the .app is written (default: dist)
+# Usage:  scripts/macos/package-app.sh [BUILD_DIR] [OUT_DIR] [--install]
+#   BUILD_DIR   cmake build tree containing the executable (default: build-macos)
+#   OUT_DIR     where the .app is written (default: dist)
+#   --install   also copy the finished .app into ~/Applications (replaces an
+#               older copy there)
 #
 # Layout produced (see scripts/macos/MACOS.md):
 #   Yoshi's Island Recomp.app/Contents/MacOS/    executable + staged sidecars
@@ -20,6 +22,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BUILD_DIR="${1:-build-macos}"
 OUT_DIR="${2:-dist}"
+INSTALL="${3:-}"
 EXE="SuperMarioWorld2YoshisIslandSNESRecomp"
 APP_NAME="Yoshi's Island Recomp"
 BUNDLE_ID="com.fabzter.smw2recomp"
@@ -43,6 +46,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     ! -name 'saves' ! -name 'save-backups' ! -name 'states' \
     ! -name '*.log' ! -name '*.sav' ! -name '*.srm' \
     ! -name '*.sfc' ! -name '*.smc' ! -name 'rom_probe.json' \
+    ! -name '*.stdout' ! -name 'last_run_report.json' \
+    ! -name 'snesrecomp_rom_identity' ! -name '_deps' \
     ! -name 'CMakeFiles' ! -name 'cmake_install.cmake' ! -name 'CMakeCache.txt' \
     ! -name 'build.ninja' ! -name 'rules.ninja' ! -name '.ninja_*' \
     ! -name '*.o' ! -name '*.a' ! -name '*.d' \
@@ -85,4 +90,14 @@ if ! codesign --force --deep --sign - "$APP" 2>/dev/null; then
 fi
 
 echo "Built: $APP"
-echo "Run:   open \"$APP\""
+
+if [ "$INSTALL" = "--install" ]; then
+  mkdir -p "$HOME/Applications"
+  rm -rf "$HOME/Applications/$APP_NAME.app"
+  ditto "$APP" "$HOME/Applications/$APP_NAME.app"
+  echo "Installed to: $HOME/Applications/$APP_NAME.app"
+  echo "Run:   open \"$HOME/Applications/$APP_NAME.app\""
+else
+  echo "Run:   open \"$APP\""
+  echo "Tip:   pass --install to copy it to ~/Applications"
+fi
