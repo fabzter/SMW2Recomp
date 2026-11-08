@@ -10,12 +10,12 @@
 name = "I_RESET"
 addr = "8000"
 bank = 0
-emit = false
+emit = true
 note = "Emulation RESET vector ($FFFC)"
 
 [[func]]
 name = "I_NMI"
 addr = "0108"
 bank = 0
-emit = false
+emit = true
 note = "Native NMI vector ($FFEA)"
