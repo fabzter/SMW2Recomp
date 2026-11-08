@@ -44,12 +44,12 @@
 
 #include "config.h"
 #include "smw2_update.h"
-#include <string.h>
-
-#ifdef RECOMP_LAUNCHER
 #include "host_paths.h"
-#include "recomp_launcher.h"
+#include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
+#ifdef RECOMP_LAUNCHER
+#include "recomp_launcher.h" 
 /* ROM patches (.ips/.ips32/.bps): the launcher applies them to the verified
  * stock image and boots the patched copy. This build runs ~100% interpreted,
  * so patched guest code actually executes (recompiled banks would bypass it).
@@ -117,6 +117,16 @@ static void Smw2AfterConfig(void) {
   if (g_config.renderer[0] == '\0') {
     strcpy(g_config.renderer, "opengl");
     g_config.output_method = kOutputMethod_OpenGL;
+  }
+  /* MSU-1: arm it automatically when a pack lives in <exe>/msu1/. The env
+   * wins when the user set one explicitly (explicit base > auto folder). */
+  if (!getenv("SNESRECOMP_MSU1")) {
+    static char s_msu_dir[1024];
+    struct stat st;
+    if (snesrecomp_exe_dir_path("msu1", s_msu_dir, sizeof(s_msu_dir)) &&
+        stat(s_msu_dir, &st) == 0 && S_ISDIR(st.st_mode)) {
+      setenv("SNESRECOMP_MSU1", s_msu_dir, 0);
+    }
   }
   Smw2UpdateCheckOnStart(SNES_GAME_VERSION);
 }
