@@ -43,13 +43,13 @@
 #endif
 
 #include "config.h"
-#include "smw2_update.h"
 #include "host_paths.h"
+#include "smw2_update.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #ifdef RECOMP_LAUNCHER
-#include "recomp_launcher.h" 
+#include "recomp_launcher.h"
 /* ROM patches (.ips/.ips32/.bps): the launcher applies them to the verified
  * stock image and boots the patched copy. This build runs ~100% interpreted,
  * so patched guest code actually executes (recompiled banks would bypass it).
@@ -131,6 +131,40 @@ static void Smw2AfterConfig(void) {
   Smw2UpdateCheckOnStart(SNES_GAME_VERSION);
 }
 
+/* ── Widescreen (phase 1: adaptive margins) ────────────────────────────────
+ * The PPU line renderer fills kPpuBufWidth-wide fields; this title opts into
+ * the generic widened path the host shares with MMX rather than the SuperFX
+ * projection replay (YI's GSU tasks are sprite/OAM compositors — there is no
+ * center_x/max_x RAM pair for WidescreenLinearProjection to widen).
+ *
+ * Frame width follows the window's drawable aspect, clamped to the PPU's
+ * 272-per-side budget. What still shows in the margins is title work the
+ * disassembly has to answer (sprites despawn by camera range, HUD anchors,
+ * camera-bound effects); this phase ships the host plumbing only. */
+#include "ppu.h"
+#ifndef SMW2_WS_MAX_EXTRA
+#define SMW2_WS_MAX_EXTRA kPpuExtraLeftRight
+#endif
+
+static void Smw2PrepareFrame(int drawable_w, int drawable_h, int *w, int *h) {
+  *h = 224;
+  *w = 256;
+  if (!g_config.widescreen || drawable_w <= 0 || drawable_h <= 0)
+    return;
+  /* Aspect-derived target: drawable_h maps to 224 lines; width in source
+   * pixels that matches the drawable's aspect. Even, and clamped to the
+   * margin budget so the priority buffers are never overrun. */
+  double aspect = (double)drawable_w / (double)drawable_h;
+  int target = (int)(224.0 * aspect * (8.0 / 7.0) + 0.5); /* SNES PAR 8:7 */
+  target &= ~1;
+  int max_w = 256 + 2 * SMW2_WS_MAX_EXTRA;
+  if (target > max_w)
+    target = max_w;
+  if (target < 256)
+    target = 256;
+  *w = target;
+}
+
 static const SnesDesktopHostGame kGameHost = {
     .display_name = "Super Mario World 2: Yoshi's Island",
     .window_title = "Super Mario World 2: Yoshi's Island",
@@ -147,6 +181,12 @@ static const SnesDesktopHostGame kGameHost = {
 #ifdef RECOMP_LAUNCHER
     .configure_launcher = Smw2ConfigureLauncher,
 #endif
+    /* Widescreen phase 1: launcher toggle + adaptive PPU margins. What the
+     * margins show needs the title-side tuning the disassembly answers
+     * (despawn ranges, HUD anchors, camera effects). */
+    .widescreen_supported = 1,
+    .native_widescreen = 1,
+    .prepare_frame = Smw2PrepareFrame,
     /* Battery-backed SRAM shows the launcher's SAVES panel. Leave NULL for a
      * title without one. The path is exe-relative. */
     .sram_path = "saves/save.srm",
