@@ -39,6 +39,8 @@ include(${SNESRECOMP_ROOT}/runner/runner.cmake)
 add_executable(SuperMarioWorld2YoshisIslandSNESRecomp
     ${SNESRECOMP_RUNNER_SOURCES}
     src/main.c
+    src/smw2_rtl.c
+    src/smw2_sprites.c
     src/smw2_update.c
     src/host_contract.c
     src/game_rtl.c
@@ -161,3 +163,26 @@ target_include_directories(SuperMarioWorld2YoshisIslandSNESRecomp PRIVATE
 
 # Netplay is not built into this target.
 # No multitap: two seats, one controller per port.
+
+# Synthetic widescreen regressions exercise the real shadow store without a ROM.
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(smw2_ws_test
+      tests/smw2_ws_test.c
+      ${SNESRECOMP_ROOT}/runner/src/snes/ws_shadow.c)
+  target_include_directories(smw2_ws_test PRIVATE ${SNESRECOMP_ROOT}/runner/src)
+  add_test(NAME smw2_ws_addresses COMMAND smw2_ws_test)
+  set_tests_properties(smw2_ws_addresses PROPERTIES
+      ENVIRONMENT "SNESRECOMP_WS_BG_MARGINS=1;SNESRECOMP_WS_BG_MARGINS_DEBUG=0")
+
+  # Task-4 widescreen completion: pure geometry, real PPU BG raster paths
+  # (both renderers), production snapshot/rollback lifecycle gates (spliced
+  # translation unit) and real src/main.c hook wiring. The runner builds,
+  # runs and re-runs everything under ASan+UBSan.
+  find_package(Python3 COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME smw2_task4_widescreen
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/run_smw2_task4.py)
+    set_tests_properties(smw2_task4_widescreen PROPERTIES TIMEOUT 300)
+  endif()
+endif()

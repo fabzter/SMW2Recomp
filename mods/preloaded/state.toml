@@ -1,0 +1,10 @@
+format_version = 1
+
+[[package]]
+id = "snesrecomp.diagnostics.coverage"
+version = "1.0.0"
+
+[[feature]]
+package_id = "snesrecomp.diagnostics.coverage"
+id = "capture"
+enabled = false

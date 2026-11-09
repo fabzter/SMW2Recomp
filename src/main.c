@@ -27,6 +27,7 @@
 
 #include "game_rtl.h"
 #include "host_main.h"
+#include "smw2_rtl.h"
 #include "snesrecomp_rom_identity.h" /* generated from rom_identity.txt */
 
 #ifndef __ANDROID__
@@ -131,38 +132,101 @@ static void Smw2AfterConfig(void) {
   Smw2UpdateCheckOnStart(SNES_GAME_VERSION);
 }
 
-/* ── Widescreen (phase 1: adaptive margins) ────────────────────────────────
+/* ── Widescreen (full adaptive scope) ──────────────────────────────────────
  * The PPU line renderer fills kPpuBufWidth-wide fields; this title opts into
  * the generic widened path the host shares with MMX rather than the SuperFX
  * projection replay (YI's GSU tasks are sprite/OAM compositors — there is no
  * center_x/max_x RAM pair for WidescreenLinearProjection to widen).
  *
- * Frame width follows the window's drawable aspect, clamped to the PPU's
- * 272-per-side budget. What still shows in the margins is title work the
- * disassembly has to answer (sprites despawn by camera range, HUD anchors,
- * camera-bound effects); this phase ships the host plumbing only. */
+ * Frame width follows the window's drawable aspect under the configured
+ * pixel aspect (display_aspect.h), clamped to the PPU's 272-per-side
+ * budget. Two hooks need that same geometry per simulated frame and share
+ * it through smw2_ws_geometry.h so they can never diverge:
+ *
+ *   - prepare_frame runs INSIDE PreparePpuFrame, which then publishes the
+ *     result as the live margins (PpuSetExtraSpace) and g_ws_extra;
+ *   - before_run_frame runs BEFORE PreparePpuFrame, where g_ws_extra /
+ *     g_ws_active still hold LAST frame's values — the sprite policy must
+ *     arm against fresh drawable PIXELS, never the stale host fields.
+ *
+ * The sprite lifecycle is Task 3's (smw2_sprites.c): BeforeFrame arms the
+ * title's own pack/spawn/despawn hooks against the live margins, BeginFrame
+ * consumes one completed pack capture and publishes its signed OAM
+ * coordinates (a packed-content binding — SnesRenderIndexOam stays the raw
+ * identity key; the table never decodes positions by itself). The
+ * background policy is Task 2's (smw2_rtl.c): Configure runs at its
+ * existing post-Prepare point where g_ws_* are fresh. */
 #include "ppu.h"
-#ifndef SMW2_WS_MAX_EXTRA
-#define SMW2_WS_MAX_EXTRA kPpuExtraLeftRight
-#endif
+#include "host_api.h" /* g_window — the owned window; never a guessed id */
+#include "smw2_sprites.h"
+#include "smw2_ws_geometry.h"
+
+/* Per-frame margins from the owned window's drawable, in PIXELS (the
+ * SDL3 call is SDL_GetWindowSizeInPixels — never the Retina-doubled-mismatch
+ * logical size). before_run_frame runs on the host's main thread, so the
+ * main-thread-only query is legal there. */
+static Smw2WsGeometry Smw2WsFrameGeometry(void) {
+  int dw = 0, dh = 0;
+  if (g_window)
+    snesrecomp_sdl_get_drawable_size(g_window, &dw, &dh);
+  return Smw2WsComputeGeometry(dw, dh, g_config.display_aspect,
+                               g_config.widescreen, PpuWsExtraOverride());
+}
 
 static void Smw2PrepareFrame(int drawable_w, int drawable_h, int *w, int *h) {
+  const Smw2WsGeometry geo =
+      Smw2WsComputeGeometry(drawable_w, drawable_h, g_config.display_aspect,
+                            g_config.widescreen, PpuWsExtraOverride());
+  *w = geo.width;
   *h = 224;
-  *w = 256;
-  if (!g_config.widescreen || drawable_w <= 0 || drawable_h <= 0)
-    return;
-  /* Aspect-derived target: drawable_h maps to 224 lines; width in source
-   * pixels that matches the drawable's aspect. Even, and clamped to the
-   * margin budget so the priority buffers are never overrun. */
-  double aspect = (double)drawable_w / (double)drawable_h;
-  int target = (int)(224.0 * aspect * (8.0 / 7.0) + 0.5); /* SNES PAR 8:7 */
-  target &= ~1;
-  int max_w = 256 + 2 * SMW2_WS_MAX_EXTRA;
-  if (target > max_w)
-    target = max_w;
-  if (target < 256)
-    target = 256;
-  *w = target;
+}
+
+/* Simulated frame, before guest execution (and before PreparePpuFrame —
+ * g_ws_extra is stale here): arm the sprite pack/spawn/despawn widening
+ * against THIS frame's fresh margins. */
+static void Smw2BeforeRunFrame(void) {
+  const Smw2WsGeometry geo = Smw2WsFrameGeometry();
+  Smw2SpritesBeforeFrame(geo.left_extra, geo.right_extra);
+}
+
+/* After guest simulation, around the raster (PreparePpuFrame has just
+ * republished g_ws_extra/extraLeftRight): the background margin engine
+ * consumes them at its existing point, then the sprite module consumes
+ * this frame's completed pack capture once and publishes the validated
+ * signed-coordinate table. No capture leaves the last publication (or a
+ * rollback-restored one) untouched — republishing a cached title capture
+ * after a rewind is exactly what BeginFrame refuses to do. */
+static void Smw2BeginFrame(unsigned number) {
+  (void)number;
+  Smw2ConfigureWsBgMargins();
+  Smw2SpritesBeginFrame();
+}
+
+/* Timeline jump (reset / savestate load / overlay close — GameReset's only
+ * callers): pending capture ownership and the published coordinate table
+ * belong to the abandoned timeline, and the world-keyed background store
+ * re-proves cold on the next frame. */
+static void Smw2OnReset(void) {
+  Smw2SpritesReset();
+  Smw2ResetWsBackgrounds();
+}
+
+/* The ROM bytes are in hand but the machine is not yet built (the host
+ * calls this before SnesInit, including on a ROM swap): drop any module
+ * ownership bound to the previous cart/core. Both calls are machine-free
+ * safe. */
+static void Smw2OnRomLoaded(const uint8_t *rom, size_t size) {
+  (void)rom;
+  (void)size;
+  Smw2SpritesShutdown();
+  Smw2ResetWsBackgrounds();
+}
+
+/* The frame loop is over and the host is about to tear the machine down:
+ * disarm this title's GSU hooks while their core still exists. */
+static void Smw2OnShutdown(void) {
+  Smw2SpritesShutdown();
+  Smw2ResetWsBackgrounds();
 }
 
 static const SnesDesktopHostGame kGameHost = {
@@ -181,12 +245,16 @@ static const SnesDesktopHostGame kGameHost = {
 #ifdef RECOMP_LAUNCHER
     .configure_launcher = Smw2ConfigureLauncher,
 #endif
-    /* Widescreen phase 1: launcher toggle + adaptive PPU margins. What the
-     * margins show needs the title-side tuning the disassembly answers
-     * (despawn ranges, HUD anchors, camera effects). */
+    /* Full adaptive widescreen: launcher toggle + adaptive PPU margins,
+     * title-proven BG margins, and pack-level sprite widening. */
     .widescreen_supported = 1,
     .native_widescreen = 1,
+    .on_rom_loaded = Smw2OnRomLoaded,
+    .on_reset = Smw2OnReset,
+    .before_run_frame = Smw2BeforeRunFrame,
     .prepare_frame = Smw2PrepareFrame,
+    .begin_sim_frame = Smw2BeginFrame,
+    .on_shutdown = Smw2OnShutdown,
     /* Battery-backed SRAM shows the launcher's SAVES panel. Leave NULL for a
      * title without one. The path is exe-relative. */
     .sram_path = "saves/save.srm",

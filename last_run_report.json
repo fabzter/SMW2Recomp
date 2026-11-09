@@ -1,0 +1,68 @@
+{
+  "reason": "atexit",
+  "timestamp": "2026-11-08T12:15:59Z",
+  "build": {"game": "Super Mario World 2: Yoshi's Island", "version": "0.1.2", "pe_timestamp": 0},
+  "os": {"platform": "Darwin", "version": "27.0.0", "arch": "arm64", "cpu_brand": ""},
+  "sdl": {"compiled": "3.4.10", "linked": "3.4.10", "video_driver": "(none)", "audio_driver": "(none)"},
+  "modules": [],
+  "breadcrumbs": {"write_idx": 1, "events": [
+    {"t_ms": 0, "msg": "host_report: Super Mario World 2: Yoshi's Island 0.1.2"}
+  ]},
+  "seh": null,
+  "status": {
+    "frame": 0,
+    "main_cycles": 0,
+    "trace_write_idx": 0,
+    "dbpb_write_idx": 0
+  },
+  "cpu": {
+    "A": 0, "X": 0, "Y": 0, "S": 0, "D": 0,
+    "DB": 0, "PB": 0, "P": 0,
+    "m_flag": 0, "x_flag": 0, "emulation": 0
+  },
+  "wram": {
+    "GameMode_0100": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "DP_0080": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "DP_low_0000": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "sprite_type_009E": [0,0,0,0,0,0,0,0,0,0,0,0],
+    "sprite_status_14C8": [0,0,0,0,0,0,0,0,0,0,0,0],
+    "player_state_1925": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+    "init_sig_7F8000": [0,0,0,0]
+  },
+  "recomp_stack": {
+    "top": 0,
+    "last_func": "(none)",
+    "frames": []
+  },
+  "stack_balance": [],
+  "unresolved_abandons": {
+    "total_hits": 0,
+    "distinct_sites": 0,
+    "overflowed_hits": 0,
+    "sites": [
+    ]
+  },
+  "dispatch_log": {"total": 0, "shown": 0, "events": []},
+  "ppu_frames": {"write_idx": 0, "snaps": []},
+  "wram_probes": {},
+  "dma_events": {"write_idx": 0, "events": []},
+  "execution_share": {"frame": 0, "interp_insns": 0, "interp_cycles": 0, "cpu_cycles": 0, "master_cycles": 0, "interp_cycle_pct": 0.0000, "aot_cycle_pct": 0.0000},
+  "trace_recent": {"write_idx": 0, "events": []},
+  "dbpb_recent": {"write_idx": 0, "events": []},
+  "scoped_tripwire": {
+    "armed": 1, "triggered": 0,
+    "bank": 126, "addr_lo": 6448, "addr_hi": 6448,
+    "match_enabled": 1, "match_val": 250,
+    "triggered": false
+  },
+  "db_tripwire": {
+    "armed": 1, "triggered": 0, "target_db": 192
+  },
+  "px_tripwire": {
+    "armed": 1, "triggered": 0,
+    "breadcrumb_count": 0, "pmut_count": 0,
+    "pmut_ring": [],
+    "breadcrumbs": []
+  },
+  "threads": []
+}

@@ -32,6 +32,11 @@ cd "$ROOT"
 SRC="$BUILD_DIR"
 [ -x "$SRC/$EXE" ] || { echo "package-app.sh: $SRC/$EXE not found — run scripts/macos/build-macos.sh first" >&2; exit 1; }
 
+# OUT_DIR may be relative (to ROOT) or absolute; resolve it now so the
+# payload loop below never re-roots an absolute path under ROOT.
+mkdir -p "$OUT_DIR"
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+
 VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || echo dev)"
 
 APP="$OUT_DIR/$APP_NAME.app"
@@ -42,16 +47,22 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 # per-machine/user state that must never ship inside a bundle.
 ( cd "$SRC" && find . -mindepth 1 -maxdepth 1 \
     ! -name 'rom.cfg' ! -name 'keybinds.ini' ! -name 'config.ini' \
-    ! -name 'input.ini' ! -name 'update.ini' ! -name 'audio_interpolation.txt' \
+    ! -name 'config.*.ini' ! -name 'input.ini' ! -name 'update.ini' \
+    ! -name 'audio_interpolation.txt' \
     ! -name 'saves' ! -name 'save-backups' ! -name 'states' \
     ! -name '*.log' ! -name '*.sav' ! -name '*.srm' \
     ! -name '*.sfc' ! -name '*.smc' ! -name 'rom_probe.json' \
     ! -name '*.stdout' ! -name 'last_run_report.json' \
     ! -name 'snesrecomp_rom_identity' ! -name '_deps' \
     ! -name 'CMakeFiles' ! -name 'cmake_install.cmake' ! -name 'CMakeCache.txt' \
+    ! -name 'CTestTestfile.cmake' ! -name 'DartConfiguration.tcl' \
+    ! -name 'Testing' ! -name 'smw2_ws_test' ! -name 'smw2_ws_geometry' \
+    ! -name 'smw2_bg_render' ! -name 'smw2_state_load' \
+    ! -name 'smw2_host_wiring' ! -name 'smw2_runahead' \
+    ! -name '*.dSYM' \
     ! -name 'build.ninja' ! -name 'rules.ninja' ! -name '.ninja_*' \
     ! -name '*.o' ! -name '*.a' ! -name '*.d' \
-    -exec ditto {} "$ROOT/$APP/Contents/MacOS/{}" \; )
+    -exec ditto {} "$APP/Contents/MacOS/{}" \; )
 
 # SDL_GetBasePath() returns Contents/Resources inside a bundle; the launcher
 # resolves its art/fonts through it. Symlink rather than copy the payload.

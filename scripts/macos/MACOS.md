@@ -119,3 +119,17 @@ applies, and bundling is unsigned/ad-hoc.
   callbacks, and normal `SDL_QUIT` shutdown.
 - Gatekeeper quarantine can still apply if the binary is moved into a different
   signed/unsigned packaging flow; this native checkout build is unsigned.
+
+## Native qualification
+
+`tests/run_smw2_widescreen_native.py` qualifies the built candidate end to
+end against the retained gold captures: `Widescreen=0` parity, genuine
+16:9/32:9 gameplay, sprite capacity, cross-flag save/load via a queued
+ordinary `loadstate`, RunAhead, measured relaunch-time drawable
+adaptation, a live same-process drawable resize plus a real rewind
+round-trip driven by the disclosed test-only helper
+(`tests/smw2_native_livehost.m`, compiled into the isolated run dir and
+DYLD-injected into the copied test binary only), and the TRACE
+instrumented build (`SNESRECOMP_ENABLE_TRACE=ON` in a separate
+`build-trace/` cache — the release cache is never mutated). See
+`docs/WIDESCREEN.md` for the measured scope and how to run each scenario.
