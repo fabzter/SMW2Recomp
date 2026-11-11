@@ -63,6 +63,29 @@ void snes_beam_frame_driver_run_frame(void) {}
 void snes_beam_frame_driver_draw_ppu_frame(void) {}
 void snes_beam_frame_driver_reset(void) {}
 
+/* beam driver snapshot hooks game_rtl.c binds (identity is what is tested) */
+#include <stdbool.h>
+#include <stddef.h>
+struct SaveLoadInfo;
+void snes_beam_frame_driver_state_save(struct SaveLoadInfo *sli) { (void)sli; }
+void snes_beam_frame_driver_state_load(struct SaveLoadInfo *sli,
+                                       uint32_t version) {
+  (void)sli; (void)version;
+}
+void snes_beam_frame_driver_state_loaded(uint32_t version) { (void)version; }
+const char *snes_beam_frame_driver_state_identity(void) { return "test"; }
+bool snes_beam_frame_driver_state_preflight(const void *data, size_t size) {
+  (void)data; (void)size; return true;
+}
+
+void snesrecomp_opengl_set_screenshot_sidecar(void (*fn)(const char *)) {
+  (void)fn;
+}
+
+/* telemetry observers main.c calls (proven by their own run, not here) */
+void Smw2TelemetryFrame(unsigned frame) { (void)frame; }
+void Smw2TelemetrySidecar(const char *path) { (void)path; }
+
 /* SDL window + scripted PIXEL-size drawable. The real SDL3 headers come in
  * through main.c's sdl_compat.h; SDL_Window is opaque, so complete it as a
  * dummy to own an instance, and override the size getter at LINK level —

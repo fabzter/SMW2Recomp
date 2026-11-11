@@ -18,6 +18,7 @@
  * renderer's. */
 
 #include "snes/ppu.h"
+#include "snes/ppu_brightness.h"
 #include "snes/snes.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -506,8 +507,9 @@ static void bg1_brightness(unsigned flags) {
   p.inidisp = 8;
   draw_row(0);
   {
-    /* channels = emit5(31)*8/15 = 255*8/15 = 136 */
-    unsigned v = 255u * 8u / 15u;
+    /* Hardware scales in the 5-bit domain with rounding, then expands
+     * (ppu_brightness.h, bsnes lightTable): round(31*8/15)=17 -> 140. */
+    unsigned v = ppu_brightness_level(31, 8);
     CHECK(px(0, 0) == (v | (v << 8) | (v << 16)));
     /* and margins too */
     CHECK(px(-272, 0) == (v | (v << 8) | (v << 16)));

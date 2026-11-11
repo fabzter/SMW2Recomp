@@ -70,6 +70,13 @@ def build_state_load_tu(tmp):
     parts.append(function(rtl, 'bool RtlRollbackLoadFromMemory('))
     # real coordinate-table functions under test
     ppu = (RUNNER / 'snes/ppu.c').read_text(encoding='utf-8')
+    # The residue walkers expand PPU_PORT_FIELDS; the macro lives outside any
+    # function, so splice it too or the TU references an undeclared macro.
+    mstart = ppu.index('#define PPU_PORT_FIELDS')
+    mend = mstart
+    while ppu[mend] != '\n' or ppu[mend - 1] == '\\':
+        mend += 1
+    parts.append(ppu[mstart:mend + 1])
     for name in ('void PpuWsSetOamCoordinates(', 'void ppu_rb_residue_get(',
                  'void ppu_rb_residue_set('):
         parts.append(function(ppu, name))
@@ -116,7 +123,7 @@ def main():
         build_and_run(args.cc, 'smw2_bg_render',
                       [ROOT / 'tests/smw2_bg_render_test.c',
                        RUNNER / 'snes/ppu.c', RUNNER / 'snes/ppu_legacy.c',
-                       RUNNER / 'snes/ws_shadow.c'],
+                       RUNNER / 'snes/ws_shadow.c', RUNNER / 'snes/hd_jobs.c'],
                       extra_inc=INC + ['-DSMW2_LINK_REAL_WS_SHADOW'], tmp=tmp)
         sl = build_state_load_tu(tmp)
         state_srcs = [sl, RUNNER / 'snes/joypad.c', RUNNER / 'snapshot_guard.c',
@@ -139,7 +146,8 @@ def main():
                 ('smw2_bg_render', [ROOT / 'tests/smw2_bg_render_test.c',
                                     RUNNER / 'snes/ppu.c',
                                     RUNNER / 'snes/ppu_legacy.c',
-                                    RUNNER / 'snes/ws_shadow.c'],
+                                    RUNNER / 'snes/ws_shadow.c',
+                                    RUNNER / 'snes/hd_jobs.c'],
                  INC + ['-DSMW2_LINK_REAL_WS_SHADOW']),
                 ('smw2_state_load', state_srcs, state_inc),
                 ('smw2_host_wiring', [ROOT / 'tests/smw2_host_wiring_test.c'], HW_INC),
