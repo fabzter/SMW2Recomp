@@ -20,5 +20,7 @@ void Smw2ConfigureWsBgMargins(void);
 void Smw2ResetWsBackgrounds(void);
 /* Telemetry: whether the BG1 world store is currently armed (proof state). */
 int Smw2WsBg1Armed(void);
+/* Telemetry: 1 while the freeze (hold) path is active. */
+int Smw2WsBg1Holding(void);
 
 #endif /* SMW2_RTL_H_ */

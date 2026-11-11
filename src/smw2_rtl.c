@@ -291,6 +291,14 @@ static uint16_t s_scene[kSceneWords];
 static uint64_t s_scene_gen;
 static const void *s_cart_seen;
 static bool s_scene_known, s_bg1_armed, s_pending_clear;
+/* Consecutive-frame budget for the freeze path. A proof that never comes
+ * back (a genuine cross-section whose scene words did not change) must
+ * still stand the layer down like the original semantics, not freeze the
+ * previous section's gutters forever. */
+enum { kWsHoldFrameBudget = 30 };
+static int s_hold_frames;
+
+int Smw2WsBg1Holding(void) { return s_hold_frames > 0 ? 1 : 0; }
 
 int Smw2WsBg1Armed(void) { return s_bg1_armed ? 1 : 0; }
 
@@ -356,6 +364,7 @@ void Smw2ConfigureWsBgMargins(void) {
     WsShadowSetFrameHold(kBg1, true);
     s_bg1_armed = false;
     s_pending_clear = true;
+    s_hold_frames++;
     transition = true;
     any = true;
   }
@@ -402,11 +411,22 @@ void Smw2ConfigureWsBgMargins(void) {
          * into raw tilemap wrap and re-proving from cold. */
         WsShadowSetFrameHold(kBg1, true);
         any = true;
+        if (++s_hold_frames > kWsHoldFrameBudget) {
+          /* Chronic failure: this is a real layout change the scene words
+           * missed. Stand down exactly like the pre-hold semantics. */
+          WsShadowSetFrameHold(kBg1, false);
+          WsShadowReset();
+          s_bg1_armed = false;
+          s_pending_clear = false;
+          s_hold_frames = 0;
+          any = false;
+        }
       } else if (!proven) {
         WsShadowSetFrameHold(kBg1, false);
       }
       if (proven) {
         WsShadowSetFrameHold(kBg1, false);
+        s_hold_frames = 0;
         if (s_pending_clear) {
           WsShadowReset();
           s_pending_clear = false;
@@ -480,7 +500,16 @@ void Smw2ConfigureWsBgMargins(void) {
        * re-arms. Never drop into raw wrap for these frames. */
       PpuSetExtraSpaceCentered(g_ppu, g_ppu->extraLeftRight);
       WsShadowSetFrameHold(kBg1, true);
-      any = true;
+      if (++s_hold_frames > kWsHoldFrameBudget) {
+        WsShadowSetFrameHold(kBg1, false);
+        WsShadowReset();
+        s_bg1_armed = false;
+        s_pending_clear = false;
+        s_hold_frames = 0;
+        any = false;
+      } else {
+        any = true;
+      }
     }
   }
   if (!any && was_active)

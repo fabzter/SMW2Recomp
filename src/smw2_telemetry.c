@@ -71,7 +71,7 @@ static void ReadRow(TelemetryRow *r) {
       if (g_ppu->wsOamMotionGrace[i])
         r->grace++;
   }
-  r->armed = Smw2WsBg1Armed();
+  r->armed = Smw2WsBg1Holding() ? 2 : Smw2WsBg1Armed();
   r->bg1_active = WsShadowLayerActive(0) ? 1 : 0;
   WsShadowGetMarginStats(0, &r->ms);
   r->mode7 = g_config.mode7.enabled ? 1 : 0;
