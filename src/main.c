@@ -45,7 +45,11 @@
 
 #include "config.h"
 #include "host_paths.h"
+#include "smw2_telemetry.h"
 #include "smw2_update.h"
+#ifndef __ANDROID__
+#include "opengl.h"
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -130,6 +134,9 @@ static void Smw2AfterConfig(void) {
     }
   }
   Smw2UpdateCheckOnStart(SNES_GAME_VERSION);
+#ifndef __ANDROID__
+  snesrecomp_opengl_set_screenshot_sidecar(Smw2TelemetrySidecar);
+#endif
 }
 
 /* ── Widescreen (full adaptive scope) ──────────────────────────────────────
@@ -159,6 +166,7 @@ static void Smw2AfterConfig(void) {
 #include "ppu.h"
 #include "host_api.h" /* g_window — the owned window; never a guessed id */
 #include "smw2_sprites.h"
+#include "smw2_telemetry.h"
 #include "smw2_ws_geometry.h"
 
 /* Per-frame margins from the owned window's drawable, in PIXELS (the
@@ -200,6 +208,7 @@ static void Smw2BeginFrame(unsigned number) {
   (void)number;
   Smw2ConfigureWsBgMargins();
   Smw2SpritesBeginFrame();
+  Smw2TelemetryFrame(number);
 }
 
 /* Timeline jump (reset / savestate load / overlay close — GameReset's only

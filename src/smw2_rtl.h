@@ -18,5 +18,7 @@ void Smw2ConfigureWsBgMargins(void);
  * cold first observation that can arm only on a complete native proof. The
  * BG3 widen policy is also reapplied to its inactive value. */
 void Smw2ResetWsBackgrounds(void);
+/* Telemetry: whether the BG1 world store is currently armed (proof state). */
+int Smw2WsBg1Armed(void);
 
 #endif /* SMW2_RTL_H_ */

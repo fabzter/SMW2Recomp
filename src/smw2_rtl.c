@@ -292,6 +292,8 @@ static uint64_t s_scene_gen;
 static const void *s_cart_seen;
 static bool s_scene_known, s_bg1_armed;
 
+int Smw2WsBg1Armed(void) { return s_bg1_armed ? 1 : 0; }
+
 /* BG3 is level artwork and a dialogue carrier, not a fixed status strip —
  * never a frame-latched shadow and never a guessed top-band rule. It may
  * render naturally into the margins only while ALL of these hold (bank01
