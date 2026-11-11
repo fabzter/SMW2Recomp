@@ -299,6 +299,7 @@ static bool s_scene_known, s_bg1_armed, s_pending_clear;
  * previous section's gutters forever. */
 enum { kWsHoldFrameBudget = 30 };
 static int s_hold_frames;
+static int32_t s_proof_wx, s_proof_wy;
 
 int Smw2WsBg1Holding(void) { return s_hold_frames > 0 ? 1 : 0; }
 
@@ -425,9 +426,18 @@ void Smw2ConfigureWsBgMargins(void) {
       }
       if (!proven && s_bg1_armed) {
         /* Settled store, same scene, eligible layout, but this frame's view
-         * walk failed (a staging DMA beat the samples). Freeze: the gutters
-         * keep serving last-good history for one frame instead of resetting
-         * into raw tilemap wrap and re-proving from cold. */
+         * walk failed. Two very different cases:
+         *   - camera where it was at the last proof: a staging DMA beat the
+         *     samples. Freeze: the gutters serve last-good history for one
+         *     frame instead of resetting into raw wrap;
+         *   - camera moved (a climb/scroll restaging rows): a frozen store
+         *     cannot answer the new rows and every miss would raw-wrap.
+         *     Center the native field for this frame (backdrop bars, store
+         *     preserved) so a moving camera never shows phantom terrain. */
+        const bool moved = llabs((long long)wx - s_proof_wx) > 8 ||
+                           llabs((long long)wy - s_proof_wy) > 8;
+        if (moved)
+          PpuSetExtraSpaceCentered(g_ppu, g_ppu->extraLeftRight);
         WsShadowSetFrameHold(kBg1, true);
         any = true;
         if (++s_hold_frames > kWsHoldFrameBudget) {
@@ -446,6 +456,8 @@ void Smw2ConfigureWsBgMargins(void) {
       if (proven) {
         WsShadowSetFrameHold(kBg1, false);
         s_hold_frames = 0;
+        s_proof_wx = wx;
+        s_proof_wy = wy;
         if (s_pending_clear) {
           WsShadowReset();
           s_pending_clear = false;
