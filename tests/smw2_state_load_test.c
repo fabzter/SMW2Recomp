@@ -186,6 +186,14 @@ int main(void) {
    * T1 is published by the module's own consume path (not hand-written),
    * so the residue carries exactly what a real BeginFrame produced. */
   PpuWsOamCoordinates t1, t2;
+  {
+    /* Policy: a native-visible part keeps hardware decode — publishing the
+     * raw GSU source over it would shift moving sprites by the game's own
+     * pack rounding. Only widened-only positions are published. */
+    PpuWsOamCoordinates t0;
+    publish_pack(40, 0x60, 0x3333, 0x0000, &t0);
+    assert(!(t0.valid[2] & 1u));
+  }
   publish_pack(300, 0x41, 0x2244, 0x0002, &t1); /* x_vis: packed_y = y-1 */
   assert(t1.valid[2] & 1u); /* slot 16 published for real */
   assert(!memcmp(&ppu.wsOamCoordinates, &t1, sizeof t1));
@@ -206,7 +214,7 @@ int main(void) {
     uint8_t hi_keep[32];
     memcpy(oam_keep, ppu.oam, sizeof oam_keep);
     memcpy(hi_keep, ppu.highOam, sizeof hi_keep);
-    publish_pack(40, 0x60, 0x3333, 0x0000, &t2);
+    publish_pack(-40, 0x60, 0x3333, 0x0003, &t2);
     assert(t2.valid[2] & 1u);
     assert(memcmp(&t1, &t2, sizeof t1) != 0);
     assert(!memcmp(&ppu.wsOamCoordinates, &t2, sizeof t2));

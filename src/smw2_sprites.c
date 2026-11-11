@@ -592,7 +592,23 @@ void Smw2SpritesBeforeFrame(int left_extra, int right_extra) {
   }
 }
 
+/* Kill switch for the signed-coordinate publication only (the BG margin
+ * policy is independent): SNESRECOMP_WS_SPRITES=0 leaves every slot to
+ * ordinary native decode. Diagnostic for field-wide publish artifacts. */
+static int smw2_publish_on(void) {
+  static int on = -1;
+  if (on < 0) {
+    const char *e = getenv("SNESRECOMP_WS_SPRITES");
+    on = !e || e[0] != '0';
+  }
+  return on;
+}
+
 void Smw2SpritesBeginFrame(void) {
+  if (!smw2_publish_on()) {
+    if (g_ppu) PpuWsSetOamCoordinates(g_ppu, NULL);
+    return;
+  }
   /* A completed capture is consumed exactly once; absence of a fresh
    * capture leaves the last validated (or residue-restored) publication
    * alone. */
@@ -643,8 +659,15 @@ void Smw2SpritesBeginFrame(void) {
     if (!match)
       continue; /* fail-closed: this slot decodes natively */
     /* Signed position: true world X and the true packed Y (real emitted
-     * Y minus one). A parked part's true coords are published too — the
-     * parked mirror byte is only the fail-closed native fallback. */
+     * Y minus one). Only parts the native clip CANNOT represent need the
+     * publication: for a native-visible part the packed byte already is
+     * the game's own rounded integer, while m->x is the raw GSU source
+     * value — overriding with it shifted moving sprites by the rounding
+     * delta (measured: ~3px squares around running/carried sprites).
+     * Widened-only parts keep their true coords; parked parts stay parked.
+     */
+    if (!m->admitted || m->x_vis)
+      continue;
     out.x[slot] = m->x;
     out.y[slot] = (int16_t)((m->y - 1) & 0xff);
     out.valid[slot >> 3] |= (uint8_t)(1u << (slot & 7));
