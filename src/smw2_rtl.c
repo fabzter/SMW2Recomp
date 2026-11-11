@@ -364,10 +364,12 @@ void Smw2ConfigureWsBgMargins(void) {
      * would flash raw tilemap wrap across both sides until the cold proof
      * lands) and clear the store on the next complete 12/12 proof, the
      * first frame the new scene's mapping is trusted. */
-    WsShadowSetFrameHold(kBg1, true);
+    WsShadowReset();
+    if (g_ppu)
+      PpuSetExtraSpaceCentered(g_ppu, g_ppu->extraLeftRight);
     s_bg1_armed = false;
-    s_pending_clear = true;
-    s_hold_frames++;
+    s_pending_clear = false;
+    s_hold_frames = 0;
     transition = true;
     any = true;
     if (debug)
@@ -458,10 +460,6 @@ void Smw2ConfigureWsBgMargins(void) {
         s_hold_frames = 0;
         s_proof_wx = wx;
         s_proof_wy = wy;
-        if (s_pending_clear) {
-          WsShadowReset();
-          s_pending_clear = false;
-        }
         s_bg1_armed = true;
         WsShadowSetWorld(kBg1, (uint32_t)wx, (uint32_t)wy);
         WsShadowSetScroll(kBg1, g_ppu->hScroll[kBg1], g_ppu->vScroll[kBg1]);
@@ -530,17 +528,7 @@ void Smw2ConfigureWsBgMargins(void) {
        * gutters) and freeze the store; the next eligible proven frame
        * re-arms. Never drop into raw wrap for these frames. */
       PpuSetExtraSpaceCentered(g_ppu, g_ppu->extraLeftRight);
-      WsShadowSetFrameHold(kBg1, true);
-      if (++s_hold_frames > kWsHoldFrameBudget) {
-        WsShadowSetFrameHold(kBg1, false);
-        WsShadowReset();
-        s_bg1_armed = false;
-        s_pending_clear = false;
-        s_hold_frames = 0;
-        any = false;
-      } else {
-        any = true;
-      }
+      any = true;
     }
   }
   if (!any && was_active)
