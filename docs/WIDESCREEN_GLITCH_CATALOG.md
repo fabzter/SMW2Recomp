@@ -85,6 +85,27 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
 - Widened spawn window working as designed (documented behavior change
   under widescreen, see `docs/WIDESCREEN.md`).
 
+### G5 — Phantom terrain after a chronic stand-down (user session, real play)
+- Symptom: both gutters fill with wrong flat/repeated terrain ("phantom
+  tiles") and stay that way for minutes; reported from normal-speed play
+  in the campaign (climbed section of 1-1, cam ~1090,1601, extra=112).
+- Evidence: the session's own `ws_telemetry.csv` — proof hits drop to 0/12
+  in that section (world-origin vs streamed VRAM window disagree), hold
+  (`armed=2`) repeats, the 30-frame budget expires at frame 5001-5073,
+  and from frame 5073 to quit (12798) `armed=0` with the layer inactive:
+  inactive layers render the rolling tilemap wrap into the gutters, and
+  nothing ever re-armed. Misses/raw stopped counting only because the
+  ws_shadow fetch path is skipped entirely when inactive.
+- Layer: title stand-down policy (`smw2_rtl.c`) + framework inactive-layer
+  margin behavior (raw wrap by design for unregistered layers).
+- Fix: centered-native fallback for any unarmed wide frame (`641e348`):
+  backdrop bars instead of wrap until a proof re-arms. Reproduction at the
+  exact camera via disclosed `forcepoke` of the camera mirrors.
+- Status: phantom tiles fixed; the underlying proof failure in streamed
+  window-offset sections remains open (P3) — those sections show clean
+  centered bars instead of full margins until the origin model learns the
+  stream offset.
+
 ## Not reproduced
 
 ### P1 — Sprite ghosts / missing margin sprites (user-reported)
@@ -98,6 +119,14 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   its slot is parked = ghost); screen-fixed margin pixels across
   consecutive scrolling frames.
 - Status: open, awaiting user captures from campaign scenes.
+
+### P3 — Chronic proof failure in streamed window-offset sections
+- Climbed section of 1-1 (cam x >= ~1024, y ~1601): `proof hits=0/12`
+  persistently; the BG1 hardware scroll carries a stream-window offset the
+  world-origin derivation does not model, so the VRAM-vs-MAP16 walk never
+  matches there. Gutters are clean (centered bars) post-G5 but margin
+  content is missing in that section. Needs a stream-offset-aware origin
+  (compare hScroll window staging against the GSU screen table) — open.
 
 ### P2 — Mode7 / vehicle / vertical-scroll scenes
 - Not reachable from the probe route without an exit-record table; the
