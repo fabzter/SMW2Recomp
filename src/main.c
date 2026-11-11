@@ -71,6 +71,7 @@ static void Smw2ConfigureLauncher(RecompLauncherCGameInfo *info) {
     mkdir(s_patch_cache, 0777);
   }
   info->rom_patch_supported = 1;
+  info->has_window_ratio = 1;
   info->rom_patch_cache_dir = s_patch_cache;
 #ifdef _WIN32
   info->host_toggle_label = "Check for updates on start";
@@ -81,7 +82,20 @@ static void Smw2ConfigureLauncher(RecompLauncherCGameInfo *info) {
   info->host_toggle_set = Smw2UpdateSetEnabled;
 #endif
 }
+
 #endif
+
+/* Window shape for an Auto-sized window: the configured ratio applied to the
+ * 240-line base height. 4:3 keeps the historical 320x240; wider ratios give
+ * the adaptive widescreen margins more room. An explicit WindowSize=WxH in
+ * config.ini still overrides (the host checks custom_size first). */
+static int Smw2WindowBaseWidth(int frame_w) {
+  (void)frame_w;
+  static const int kNum[4] = {4, 16, 21, 32};
+  static const int kDen[4] = {3, 9, 9, 9};
+  const unsigned idx = g_config.window_ratio < 4 ? g_config.window_ratio : 0;
+  return 240 * kNum[idx] / kDen[idx];
+}
 
 #if defined(_WIN32) && !defined(SMW2_CONSOLE)
 #include <io.h>
@@ -163,8 +177,8 @@ static void Smw2AfterConfig(void) {
  * identity key; the table never decodes positions by itself). The
  * background policy is Task 2's (smw2_rtl.c): Configure runs at its
  * existing post-Prepare point where g_ws_* are fresh. */
-#include "ppu.h"
 #include "host_api.h" /* g_window — the owned window; never a guessed id */
+#include "ppu.h"
 #include "smw2_sprites.h"
 #include "smw2_telemetry.h"
 #include "smw2_ws_geometry.h"
@@ -250,6 +264,7 @@ static const SnesDesktopHostGame kGameHost = {
     .game_info = &kGameInfo,
     .num_players = 1,
     .shader_supported = 1,
+    .window_base_width = Smw2WindowBaseWidth,
     .after_config = Smw2AfterConfig,
 #ifdef RECOMP_LAUNCHER
     .configure_launcher = Smw2ConfigureLauncher,
