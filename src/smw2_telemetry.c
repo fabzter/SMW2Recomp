@@ -99,12 +99,16 @@ void Smw2TelemetryFrame(unsigned frame) {
     char path[1024];
     if (!snesrecomp_exe_dir_path("ws_telemetry.csv", path, sizeof(path)))
       snprintf(path, sizeof(path), "ws_telemetry.csv");
-    s_csv = fopen(path, "w");
+    s_csv = fopen(path, "a");
     if (!s_csv) {
       s_csv_failed = 1;
       return;
     }
-    fprintf(s_csv,
+    long s_pos = ftell(s_csv);
+    fprintf(s_csv, "# session wall_ms=%llu build=%s\n", WallMs(),
+            SNES_GAME_VERSION);
+    if (s_pos == 0)
+      fprintf(s_csv,
             "wall_ms,frame,mode,stage,load_type,exit_rec,cam_x,cam_y,"
             "hscroll,vscroll,extra,left_cur,right_cur,armed,bg1_active,bg3w,"
             "westHit,westMiss,eastHit,eastMiss,prefillSeed,prefillRefresh,"
