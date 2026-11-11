@@ -89,6 +89,8 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
 - Symptom: both gutters fill with wrong flat/repeated terrain ("phantom
   tiles") and stay that way for minutes; reported from normal-speed play
   in the campaign (climbed section of 1-1, cam ~1090,1601, extra=112).
+  A related flash appeared in the intro cutscenes (foreign art or wrap for
+  a frame per cut) once the transition hold existed.
 - Evidence: the session's own `ws_telemetry.csv` — proof hits drop to 0/12
   in that section (world-origin vs streamed VRAM window disagree), hold
   (`armed=2`) repeats, the 30-frame budget expires at frame 5001-5073,
@@ -98,9 +100,14 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   ws_shadow fetch path is skipped entirely when inactive.
 - Layer: title stand-down policy (`smw2_rtl.c`) + framework inactive-layer
   margin behavior (raw wrap by design for unregistered layers).
-- Fix: centered-native fallback for any unarmed wide frame (`641e348`):
-  backdrop bars instead of wrap until a proof re-arms. Reproduction at the
-  exact camera via disclosed `forcepoke` of the camera mirrors.
+- Fix: centered-native fallback for any unarmed wide frame (`641e348`);
+  hold became move-aware — a proof failure while the camera moves centers
+  instead of freezing a store that cannot answer new rows (`a279a4f`);
+  scene cuts reset+center immediately instead of holding foreign art for
+  a frame, which was the intro/cutscene flash (`fe87e77`). Reproduction at
+  the exact camera via disclosed `forcepoke` of the camera mirrors (note:
+  forcepoke desyncs the GSU scroll link, so it proves the fallback, not
+  the proof failure itself).
 - Status: phantom tiles fixed; the underlying proof failure in streamed
   window-offset sections remains open (P3) — those sections show clean
   centered bars instead of full margins until the origin model learns the
