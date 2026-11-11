@@ -207,6 +207,50 @@ static void test_near_uniform_view_stands_down(void) {
   CHECK(!smw2_bg1_stream_valid(0, 0, 0, 0));
 }
 
+/* A fully consistent but NEAR-UNIFORM view: every sampled tile is the same
+ * authored empty tile (0x18ff), exactly like the stairs section whose sky
+ * fills all twelve diagonal samples. The world↔buffer mapping is still
+ * proven 12/12 and both gutters decode, so the margins must arm — uniformity
+ * alone is not evidence of a wrong mapping (P3). A single mismatch must still
+ * stand down: that is the partial-proof case the uniform heuristic guards. */
+static void stage_fixture_uniform(void) {
+  put16(g_ram, 0x39, 216);
+  put16(g_ram, 0x3b, 1780);
+  ppu.hScroll[0] = 216;
+  ppu.vScroll[0] = 756;
+  put16(rom, 0xc32a6, 0x8000); /* page one, above the 32K split */
+  for (unsigned obj = 0; obj < 256; obj++) {
+    put16(g_ram, 0x18000 + obj * 2, (uint16_t)(0x0100 + obj));
+    for (unsigned q = 0; q < 4; q++)
+      put16(rom, 0xcb3f2 + obj * 8 + q * 2, 0x18ff);
+  }
+  for (unsigned i = 0; i < 0x8000; i++)
+    ppu.vram[i] = 0x18ff;
+}
+
+static void test_uniform_proven_view_arms(void) {
+  fixture();
+  stage_fixture_uniform();
+  const unsigned wtx0 = 216 >> 3, wty0 = 1780 >> 3;
+  const unsigned btx0 = ppu.hScroll[0] >> 3, bty0 = ppu.vScroll[0] >> 3;
+  bool nu = false;
+  CHECK(smw2_bg1_view_hits(wtx0, wty0, btx0, bty0, &nu) == 12 && nu);
+  /* Perfect proof on a uniform view arms both proof levels. */
+  CHECK(smw2_bg1_stream_proven(wtx0, wty0, btx0, bty0));
+  CHECK(smw2_bg1_stream_valid(wtx0, wty0, btx0, bty0));
+  PpuSetExtraSpace(&ppu, 16);
+  Smw2ConfigureWsBgMargins();
+  CHECK(WsShadowLayerActive(0));
+  CHECK(ppu.extraLeftCur == 16 && ppu.extraRightCur == 16);
+  /* One corrupted sample breaks the perfect proof: a uniform 11/12 view is
+   * exactly the unproven case that must stay native. */
+  const unsigned addr = smw2_vram_word(btx0 + 9, bty0 + 9) & 0x7fff;
+  ppu.vram[addr] = 0x1234;
+  CHECK(smw2_bg1_view_hits(wtx0, wty0, btx0, bty0, &nu) == 11 && nu);
+  CHECK(!smw2_bg1_stream_proven(wtx0, wty0, btx0, bty0));
+  CHECK(!smw2_bg1_stream_valid(wtx0, wty0, btx0, bty0));
+}
+
 static void test_margin_store(unsigned phase) {
   fixture();
   stage_fixture(phase);
@@ -604,18 +648,16 @@ static void audit_dump(const char *dir, const char *rom_path, const char *tag) {
   const bool wram_ok = smw2_dp_u16(0x0118) == 0x000f && !g_ram[0x0d0f] &&
                        !g_ram[0x0121] && smw2_gsu_u16(0x1e2a) == 0;
   Smw2ConfigureWsBgMargins();
-  printf(
-      "%s: scene m%04x w%04x s%04x l%04x e%04x intro=%02x msg=%02x "
-      "cam_evt=%04x regs=%s wram_gates=%s bg3_eligible=%d widenY=%u "
-      "bg1_active=%d%s\n",
-      tag, sc[0], sc[1], sc[2], sc[3], sc[4], g_ram[0x0121], g_ram[0x0d0f],
-      smw2_gsu_u16(0x1e2a), live ? "live" : "fabricated",
-      wram_ok ? "pass" : "fail", smw2_bg3_eligible(), ppu.wsBg3WidenY,
-      WsShadowLayerActive(0),
-      sc[2] ==
-              0x000b
-                        ? " (intro/tutorial stage $0B — NOT normal-stage proof)"
-          : "");
+  printf("%s: scene m%04x w%04x s%04x l%04x e%04x intro=%02x msg=%02x "
+         "cam_evt=%04x regs=%s wram_gates=%s bg3_eligible=%d widenY=%u "
+         "bg1_active=%d%s\n",
+         tag, sc[0], sc[1], sc[2], sc[3], sc[4], g_ram[0x0121], g_ram[0x0d0f],
+         smw2_gsu_u16(0x1e2a), live ? "live" : "fabricated",
+         wram_ok ? "pass" : "fail", smw2_bg3_eligible(), ppu.wsBg3WidenY,
+         WsShadowLayerActive(0),
+         sc[2] == 0x000b
+             ? " (intro/tutorial stage $0B — NOT normal-stage proof)"
+             : "");
   if (hits == total && total == 780) {
     CHECK(WsShadowLayerActive(0));
     CHECK(WsShadowWorldY(0) == cy);
@@ -623,7 +665,6 @@ static void audit_dump(const char *dir, const char *rom_path, const char *tag) {
     CHECK(!WsShadowLayerActive(0));
   }
 }
-
 
 /* ===== Task5: known negative-worldX west margin =====
  *
@@ -756,6 +797,7 @@ int main(int argc, char **argv) {
   test_gsu_rom();
   test_world_origin();
   test_near_uniform_view_stands_down();
+  test_uniform_proven_view_arms();
   for (unsigned phase = 0; phase < 8; phase++)
     test_margin_store(phase);
   test_scene_transitions();

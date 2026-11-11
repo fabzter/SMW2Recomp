@@ -90,6 +90,32 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   widened-only sprites at true signed positions.
 - Status: fixed, A/B-proven.
 
+### G7 — Margins collapse at the 4:3 seam in the stairs/climbed section (was P3)
+- Symptom: in the climbed/stairs section of 1-1 (cam ~1001,1577, extra=112)
+  the wide margins collapse to centered bars and objects straddling the 4:3
+  edge clip jarringly. Owner capture frame 3014 of a recorded play session.
+- Evidence: frame-exact input replay (`SNESRECOMP_INPUT_REPLAY`, session 0)
+  reproduced the owner's `present_*.ppm` with **0/107520 pixel diff**. The
+  state dump shows the proof is **12/12**, not 0/12 — but all twelve diagonal
+  samples are the same authored sky tile `0x18ff` (modal=12), so
+  `near_uniform` fired and stood the layer down (`armed=0`). Offline MAP16
+  audit: native window 780/780 and **both gutters 465/465 tiles decode**, 24
+  distinct tiles incl. platform/stair art that continues seamlessly into the
+  margins. The view was fully provable and fully decodable.
+- Mechanism: `smw2_bg1_stream_proven`/`_valid` vetoed ANY near-uniform view
+  (`modal_n > 9`), even a perfect 12/12 proof. The heuristic exists to reject
+  a repeated-tile coincidence on a PARTIAL proof; applied to a complete proof
+  it wrongly stood down correct views whose samples happen to land on sky.
+- Layer: title proof gate (`src/smw2_rtl.c`).
+- Fix: a perfect 12/12 proof arms regardless of uniformity; the near-uniform
+  guard now vetoes only the tolerant partial-proof path (`hits >= 10 && !nu`).
+  Regression `test_uniform_proven_view_arms` (uniform-but-proven arms; one
+  corrupted sample still stands down). Post-fix replay: stairs `armed=1`,
+  native 4:3 band **0 pixels changed**, all 14,625 changed pixels in the
+  margins (real terrain replaces the collapse).
+- Status: fixed, replay + offline-audit proven. Corrects the earlier P3
+  hypothesis (stream-window offset / 0/12): the origin model was never wrong.
+
 ## Ruled out — genuine game content, not widescreen artifacts
 
 ### N1 — White mask + yellow sliver cluster
@@ -130,10 +156,9 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   the exact camera via disclosed `forcepoke` of the camera mirrors (note:
   forcepoke desyncs the GSU scroll link, so it proves the fallback, not
   the proof failure itself).
-- Status: phantom tiles fixed; the underlying proof failure in streamed
-  window-offset sections remains open (P3) — those sections show clean
-  centered bars instead of full margins until the origin model learns the
-  stream offset.
+- Status: phantom tiles fixed. The underlying stairs-section stand-down was
+  later root-caused and fixed as **G7** (the `near_uniform` veto, not a proof
+  failure or stream offset) — those sections now render full margins.
 
 ## Not reproduced
 
@@ -149,22 +174,19 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   consecutive scrolling frames.
 - Status: open, awaiting user captures from campaign scenes.
 
-### P3 — Chronic proof failure in streamed window-offset sections
-- Climbed section of 1-1 (cam x >= ~1024, y ~1601): `proof hits=0/12`
-  persistently — 0/12, not 8-10/12, says the whole VRAM window disagrees
-  with the MAP16 walk, not a lagged sample or two: either a stream-window
-  scroll offset the origin derivation does not model, or the section
-  streams BG1 from a different source (alternate screen set, swapped
-  layer, rotated staging layout). Gutters are clean (centered bars)
-  post-G5 but margin content is missing in that section — interim, not
-  done.
-- Root-cause method queued: reach the section by real play (forcepoke of
-  the camera mirrors desyncs the GSU scroll link and is only good for
-  proving the fallback), `dump` there (the state dump carries VRAM +
-  WRAM + SRAM + regs), then offline re-run the walk under origin
-  hypotheses (hScroll-based, cam-based, +-64/+-128 tile offsets, alternate
-  screen-table bases) and pick the one that scores 12/12; encode that as
-  the section's real source in `smw2_world_origin`.
+### P3 — RESOLVED → G7 (margins collapse in the stairs/climbed section)
+- The earlier hypothesis here (chronic `proof hits=0/12` from a stream-window
+  offset the origin model misses) was **disproven** by a frame-exact input
+  replay of the owner's recorded session: the proof is 12/12 and the origin
+  model is correct. The real cause was the `near_uniform` veto standing down
+  a fully-provable, fully-decodable view whose twelve samples all land on the
+  same sky tile. Fixed and replay-proven — see **G7** under Fixed.
+- Method that cracked it (keep for future reports): record a real play
+  session (`Recorded Play.command` / `SNESRECOMP_INPUT_RECORD`), replay it
+  headless at the owner's WindowSize (`SNESRECOMP_INPUT_REPLAY` +
+  `SNESRECOMP_REPLAY_SESSION`), `dump` the glitch frame, and audit the walk
+  and gutter decode offline against the dump. Pixel-diff the replay present
+  against the owner's capture to prove the repro before theorizing.
 - Pacing note for future visual runs: observation runs must use VSync=1 +
   DisableFrameDelay=0 (config_paced); unpaced configs simulate at ~170-280
   fps and hide present-timing classes. The owner's config has FrameBlend=0,

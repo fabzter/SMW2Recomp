@@ -206,19 +206,23 @@ static unsigned smw2_bg1_view_hits(uint32_t world_tx0, uint32_t world_ty0,
 static bool smw2_bg1_stream_valid(uint32_t world_tx0, uint32_t world_ty0,
                                   uint32_t buf_tx0, uint32_t buf_ty0) {
   bool nu;
-  return smw2_bg1_view_hits(world_tx0, world_ty0, buf_tx0, buf_ty0, &nu) >=
-             10 &&
-         !nu;
+  const unsigned hits =
+      smw2_bg1_view_hits(world_tx0, world_ty0, buf_tx0, buf_ty0, &nu);
+  /* A perfect 12/12 proof is positive evidence the world↔buffer mapping is
+   * correct, even when every sample is the same tile: the stairs section's
+   * sky fills all twelve diagonal samples yet both gutters decode fully from
+   * MAP16 (P3). Uniformity only vetoes a PARTIAL proof, where matching tiles
+   * could be a repeated-tile coincidence rather than a proven mapping. */
+  return hits == 12 || (hits >= 10 && !nu);
 }
 
-/* Strict cold/re-arm proof: every sample must match and the view must be
- * informative. Settled frames use the tolerant walk above instead. */
+/* Strict cold/re-arm proof: every sample must match. A complete 12/12 walk
+ * proves the mapping on its own; the near-uniform heuristic guards only the
+ * tolerant path above, not a perfect proof. Settled frames use that walk. */
 static bool smw2_bg1_stream_proven(uint32_t world_tx0, uint32_t world_ty0,
                                    uint32_t buf_tx0, uint32_t buf_ty0) {
   bool nu;
-  return smw2_bg1_view_hits(world_tx0, world_ty0, buf_tx0, buf_ty0, &nu) ==
-             12 &&
-         !nu;
+  return smw2_bg1_view_hits(world_tx0, world_ty0, buf_tx0, buf_ty0, &nu) == 12;
 }
 
 /* Outside-world tilemap entry for margin pixels whose worldX is negative
@@ -375,10 +379,10 @@ void Smw2ConfigureWsBgMargins(void) {
       fprintf(stderr,
               "[smw2_ws] f=%u SCENE FLIP old=%04X,%04X,%04X,%04X,%04X "
               "new=%04X,%04X,%04X,%04X,%04X gen %llu->%llu\n",
-              (unsigned)snes_frame_counter, s_scene[0], s_scene[1],
-              s_scene[2], s_scene[3], s_scene[4], scene[0], scene[1],
-              scene[2], scene[3], scene[4],
-              (unsigned long long)s_scene_gen, (unsigned long long)gen);
+              (unsigned)snes_frame_counter, s_scene[0], s_scene[1], s_scene[2],
+              s_scene[3], s_scene[4], scene[0], scene[1], scene[2], scene[3],
+              scene[4], (unsigned long long)s_scene_gen,
+              (unsigned long long)gen);
   }
   memcpy(s_scene, scene, sizeof(s_scene));
   s_scene_gen = gen;
@@ -447,7 +451,7 @@ void Smw2ConfigureWsBgMargins(void) {
           WsShadowSetFrameHold(kBg1, false);
           WsShadowReset();
           s_bg1_armed = false;
-                s_hold_frames = 0;
+          s_hold_frames = 0;
           any = false;
         }
       } else if (!proven) {
