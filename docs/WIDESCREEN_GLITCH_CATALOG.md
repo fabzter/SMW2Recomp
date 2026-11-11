@@ -129,11 +129,24 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
 
 ### P3 — Chronic proof failure in streamed window-offset sections
 - Climbed section of 1-1 (cam x >= ~1024, y ~1601): `proof hits=0/12`
-  persistently; the BG1 hardware scroll carries a stream-window offset the
-  world-origin derivation does not model, so the VRAM-vs-MAP16 walk never
-  matches there. Gutters are clean (centered bars) post-G5 but margin
-  content is missing in that section. Needs a stream-offset-aware origin
-  (compare hScroll window staging against the GSU screen table) — open.
+  persistently — 0/12, not 8-10/12, says the whole VRAM window disagrees
+  with the MAP16 walk, not a lagged sample or two: either a stream-window
+  scroll offset the origin derivation does not model, or the section
+  streams BG1 from a different source (alternate screen set, swapped
+  layer, rotated staging layout). Gutters are clean (centered bars)
+  post-G5 but margin content is missing in that section — interim, not
+  done.
+- Root-cause method queued: reach the section by real play (forcepoke of
+  the camera mirrors desyncs the GSU scroll link and is only good for
+  proving the fallback), `dump` there (the state dump carries VRAM +
+  WRAM + SRAM + regs), then offline re-run the walk under origin
+  hypotheses (hScroll-based, cam-based, +-64/+-128 tile offsets, alternate
+  screen-table bases) and pick the one that scores 12/12; encode that as
+  the section's real source in `smw2_world_origin`.
+- Pacing note for future visual runs: observation runs must use VSync=1 +
+  DisableFrameDelay=0 (config_paced); unpaced configs simulate at ~170-280
+  fps and hide present-timing classes. The owner's config has FrameBlend=0,
+  so interpolated presents are not a factor in their reports.
 
 ### P2 — Mode7 / vehicle / vertical-scroll scenes
 - Not reachable from the probe route without an exit-record table; the

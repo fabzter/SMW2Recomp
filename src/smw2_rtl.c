@@ -292,7 +292,7 @@ static void smw2_scene_tuple(uint16_t out[kSceneWords]) {
 static uint16_t s_scene[kSceneWords];
 static uint64_t s_scene_gen;
 static const void *s_cart_seen;
-static bool s_scene_known, s_bg1_armed, s_pending_clear;
+static bool s_scene_known, s_bg1_armed;
 /* Consecutive-frame budget for the freeze path. A proof that never comes
  * back (a genuine cross-section whose scene words did not change) must
  * still stand the layer down like the original semantics, not freeze the
@@ -368,7 +368,6 @@ void Smw2ConfigureWsBgMargins(void) {
     if (g_ppu)
       PpuSetExtraSpaceCentered(g_ppu, g_ppu->extraLeftRight);
     s_bg1_armed = false;
-    s_pending_clear = false;
     s_hold_frames = 0;
     transition = true;
     any = true;
@@ -448,8 +447,7 @@ void Smw2ConfigureWsBgMargins(void) {
           WsShadowSetFrameHold(kBg1, false);
           WsShadowReset();
           s_bg1_armed = false;
-          s_pending_clear = false;
-          s_hold_frames = 0;
+                s_hold_frames = 0;
           any = false;
         }
       } else if (!proven) {
