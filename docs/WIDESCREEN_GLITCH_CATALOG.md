@@ -68,6 +68,28 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   original stand-down semantics apply; telemetry `armed=2` marks holds.
 - Status: fixed (`51c45a5`, `d812e14`; framework `0c76c83d`, `be4a4d1b`).
 
+### G6 — Seam squares around moving sprites in the native band
+- Symptom: jarring rectangle seams around Yoshi/carried sprites and other
+  moving objects; inside the rect the picture looks squashed/shifted.
+  Owner capture at frame 11372 (climbed 1-1, extra=112); reproduced in
+  harness at frame ~8080 of the climb route.
+- Evidence: native-band diff widescreen-on vs widescreen-off = one 34x32
+  rect around the sprite cluster; per-sprite centroids shifted ~+3,+2 px
+  under widescreen. `SNESRECOMP_WS_SPRITES=0` (publication kill switch)
+  made the native band pixel-identical to widescreen-off, isolating the
+  signed-coordinate publication as the sole delta.
+- Mechanism: publication overrode every matched slot's decode with the
+  raw GSU source value; for native-visible parts the packed OAM byte is
+  the game's own rounded integer, so moving sprites shifted by the
+  rounding delta (static sprites round identically, hence "only when
+  running/moving").
+- Layer: title sprite policy (`src/smw2_sprites.c` publication gate).
+- Fix: publish coordinates only for widened-only parts (admitted,
+  x_vis false); native-visible and parked parts keep hardware decode
+  (`ff32628`). Post-fix native band diff = None; margins still show
+  widened-only sprites at true signed positions.
+- Status: fixed, A/B-proven.
+
 ## Ruled out — genuine game content, not widescreen artifacts
 
 ### N1 — White mask + yellow sliver cluster
