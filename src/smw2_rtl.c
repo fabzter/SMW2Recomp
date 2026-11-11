@@ -50,6 +50,8 @@
 #include "snes/ws_shadow.h"
 #include "types.h"
 
+extern int snes_frame_counter;
+
 extern bool g_ws_active;
 extern int g_ws_extra;
 
@@ -367,6 +369,14 @@ void Smw2ConfigureWsBgMargins(void) {
     s_hold_frames++;
     transition = true;
     any = true;
+    if (debug)
+      fprintf(stderr,
+              "[smw2_ws] f=%u SCENE FLIP old=%04X,%04X,%04X,%04X,%04X "
+              "new=%04X,%04X,%04X,%04X,%04X gen %llu->%llu\n",
+              (unsigned)snes_frame_counter, s_scene[0], s_scene[1],
+              s_scene[2], s_scene[3], s_scene[4], scene[0], scene[1],
+              scene[2], scene[3], scene[4],
+              (unsigned long long)s_scene_gen, (unsigned long long)gen);
   }
   memcpy(s_scene, scene, sizeof(s_scene));
   s_scene_gen = gen;
@@ -404,6 +414,15 @@ void Smw2ConfigureWsBgMargins(void) {
       const bool proven =
           s_bg1_armed ? smw2_bg1_stream_valid(wtx0, wty0, buf_tx0, buf_ty0)
                       : smw2_bg1_stream_proven(wtx0, wty0, buf_tx0, buf_ty0);
+      if (debug && (snes_frame_counter % 30u) == 0) {
+        bool nu = false;
+        unsigned hh = smw2_bg1_view_hits(wtx0, wty0, buf_tx0, buf_ty0, &nu);
+        fprintf(stderr,
+                "[smw2_ws] f=%u proof hits=%u/12 near_uniform=%d armed=%d "
+                "mode=%u wtx0=%u wty0=%u buf=%u,%u\n",
+                (unsigned)snes_frame_counter, hh, nu ? 1 : 0,
+                s_bg1_armed ? 1 : 0, mode, wtx0, wty0, buf_tx0, buf_ty0);
+      }
       if (!proven && s_bg1_armed) {
         /* Settled store, same scene, eligible layout, but this frame's view
          * walk failed (a staging DMA beat the samples). Freeze: the gutters
@@ -520,6 +539,13 @@ void Smw2ConfigureWsBgMargins(void) {
    * late scene change can never leave an active flag stale. */
   if (g_ppu)
     WsShadowFrame(g_ppu);
+  /* Universal fallback: a wide frame whose BG1 store is not active (boot
+   * before first proof, stood-down section, menus) must NEVER render the
+   * rolling tilemap's wrap into the gutters — that is the phantom-terrain
+   * artifact. Center the native field instead: backdrop bars, exactly like
+   * a transition frame, until a proof re-arms the layer. */
+  if (g_ppu && on && g_ws_active && !WsShadowLayerActive(kBg1))
+    PpuSetExtraSpaceCentered(g_ppu, g_ppu->extraLeftRight);
   if (debug) {
     static unsigned calls;
     if (!(calls++ % 120))
