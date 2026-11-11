@@ -290,7 +290,7 @@ static void smw2_scene_tuple(uint16_t out[kSceneWords]) {
 static uint16_t s_scene[kSceneWords];
 static uint64_t s_scene_gen;
 static const void *s_cart_seen;
-static bool s_scene_known, s_bg1_armed;
+static bool s_scene_known, s_bg1_armed, s_pending_clear;
 
 int Smw2WsBg1Armed(void) { return s_bg1_armed ? 1 : 0; }
 
@@ -340,6 +340,8 @@ void Smw2ConfigureWsBgMargins(void) {
   uint16_t scene[kSceneWords];
   smw2_scene_tuple(scene);
   bool transition = false;
+  bool any = false;
+  static bool was_active;
   if (!s_scene_known || cart != s_cart_seen) {
     /* Cold observation (or a swapped cart): drop any inherited store, then
      * arm only on a complete proof — no centered frame is owed. */
@@ -347,12 +349,15 @@ void Smw2ConfigureWsBgMargins(void) {
     s_bg1_armed = false;
   } else if (gen != s_scene_gen || memcmp(scene, s_scene, sizeof(scene)) != 0) {
     /* Known scene/timeline change: the stored world belongs to another
-     * scene. Drop it and give this frame the centered native window; the
-     * next complete 12/12 proof re-arms. The change frame itself never
-     * re-registers, so unproven wrap can not be shown mid-transition. */
-    WsShadowReset();
+     * scene. Freeze the gutters for the change frame (an instant reset
+     * would flash raw tilemap wrap across both sides until the cold proof
+     * lands) and clear the store on the next complete 12/12 proof, the
+     * first frame the new scene's mapping is trusted. */
+    WsShadowSetFrameHold(kBg1, true);
     s_bg1_armed = false;
+    s_pending_clear = true;
     transition = true;
+    any = true;
   }
   memcpy(s_scene, scene, sizeof(s_scene));
   s_scene_gen = gen;
@@ -370,7 +375,6 @@ void Smw2ConfigureWsBgMargins(void) {
         (on && g_ws_active && !transition && smw2_bg3_eligible()) ? 1 : 0);
   }
 
-  bool any = false;
   if (g_ppu && g_snes && g_snes->cart && on && g_ws_active && !transition) {
     /* Mode = bits 0-2 only: YI levels run BG2 with 16x16 tiles (bit 5), so
      * the X2 mask 0x37 would fold that size bit into the mode test and gate
@@ -391,7 +395,22 @@ void Smw2ConfigureWsBgMargins(void) {
       const bool proven =
           s_bg1_armed ? smw2_bg1_stream_valid(wtx0, wty0, buf_tx0, buf_ty0)
                       : smw2_bg1_stream_proven(wtx0, wty0, buf_tx0, buf_ty0);
+      if (!proven && s_bg1_armed) {
+        /* Settled store, same scene, eligible layout, but this frame's view
+         * walk failed (a staging DMA beat the samples). Freeze: the gutters
+         * keep serving last-good history for one frame instead of resetting
+         * into raw tilemap wrap and re-proving from cold. */
+        WsShadowSetFrameHold(kBg1, true);
+        any = true;
+      } else if (!proven) {
+        WsShadowSetFrameHold(kBg1, false);
+      }
       if (proven) {
+        WsShadowSetFrameHold(kBg1, false);
+        if (s_pending_clear) {
+          WsShadowReset();
+          s_pending_clear = false;
+        }
         s_bg1_armed = true;
         WsShadowSetWorld(kBg1, (uint32_t)wx, (uint32_t)wy);
         WsShadowSetScroll(kBg1, g_ppu->hScroll[kBg1], g_ppu->vScroll[kBg1]);
@@ -406,20 +425,47 @@ void Smw2ConfigureWsBgMargins(void) {
          * page) is explicitly invalidated — the previously stored tile
          * must not survive behind the live capture's back. */
         const int extra_tiles = (g_ws_extra + 7) >> 3;
+        /* The legacy prune drops every east-of-view cell each frame, which
+         * deleted this frame's MAP16 prefill before the raster ever read it
+         * (steady east-margin raw-wrap). Retain both gutters' worth. */
+        WsShadowSetEastKeep(kBg1, extra_tiles + 2);
+        WsShadowSetWestKeep(kBg1, extra_tiles + 2);
         const uint32_t tx0 = (uint32_t)wx >> 3;
         const uint32_t ty0 = (uint32_t)wy >> 3;
+        /* Cells the MAP16 tables cannot resolve (screens the GSU has not
+         * streamed, rows past the level edge) must never fall through to
+         * the rolling tilemap's wrap: that paints far-away terrain into the
+         * gutter (the "repeated strip" artifact). Serve the validated empty
+         * entry instead; with none available, invalidate as before. */
+        const int empty_entry = smw2_bg1_outside_entry();
         /* Matches WsShadowFrame's live capture: cols is clamped to
          * kWsLiveMaxCols (32), so the fine-scroll overhang column tx0+32 is
          * NEVER captured from VRAM and must be force-filled in every phase. */
-        for (int dx = -extra_tiles; dx < 32 + extra_tiles; dx++) {
+        /* +1 column each side: with a nonzero world-tile phase the margin's
+         * outer pixel column falls one tile beyond extra/8 (measured: the
+         * entire east raw-wrap rate was exactly that one column). */
+        for (int dx = -extra_tiles - 1; dx < 32 + extra_tiles + 1; dx++) {
           if (dx >= 0 && dx < 32)
             continue; /* native viewport — captured from real VRAM */
-          const uint32_t tx = (uint32_t)((int32_t)tx0 + dx);
+          const int32_t txi = (int32_t)tx0 + dx;
+          /* Negative world tiles wrap to uint32 and would key the store at
+           * the far side of the world; smw2_bg1_tile's screen index then
+           * masks into a populated far-east screen and its art lands in the
+           * west gutter. The west-of-world bound tile owns those cells. */
+          if (txi < 0)
+            continue;
+          const uint32_t tx = (uint32_t)txi;
           for (int row = -1; row < 30; row++) {
-            const uint32_t ty = (uint32_t)((int32_t)ty0 + row);
+            const int32_t tyi = (int32_t)ty0 + row;
+            if (tyi < 0)
+              continue;
+            const uint32_t ty = (uint32_t)tyi;
             uint16_t entry;
             if (!smw2_bg1_tile(tx, ty, &entry)) {
-              WsShadowInvalidateTile(kBg1, tx, ty);
+              if (empty_entry >= 0)
+                WsShadowForceTile(kBg1, tx, ty, (uint16_t)empty_entry);
+              else
+                WsShadowInvalidateTile(kBg1, tx, ty);
             } else {
               WsShadowForceTile(kBg1, tx, ty, entry);
             }
@@ -427,9 +473,16 @@ void Smw2ConfigureWsBgMargins(void) {
         }
         any = true;
       }
+    } else if (on && g_ws_active && !transition && was_active) {
+      /* The layout left the provable family this frame (cross-section
+       * BGMODE flip, menu): center the native window (backdrop bars in the
+       * gutters) and freeze the store; the next eligible proven frame
+       * re-arms. Never drop into raw wrap for these frames. */
+      PpuSetExtraSpaceCentered(g_ppu, g_ppu->extraLeftRight);
+      WsShadowSetFrameHold(kBg1, true);
+      any = true;
     }
   }
-  static bool was_active;
   if (!any && was_active)
     WsShadowReset();
   was_active = any;
