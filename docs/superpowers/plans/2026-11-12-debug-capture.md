@@ -41,32 +41,36 @@ file; the design below IS the authority). Owner requirements, verbatim intent:
 - GC6: Artifact redirection is ONE helper in `host_paths.{c,h}`:
   `int snesrecomp_artifact_path(const char *leaf, char *out, size_t max_len)`
   — env `SNESRECOMP_ARTIFACT_DIR` set ⇒ `<dir>/<leaf>` (dir created once,
-  recursively-safe via existing MkDir-style logic or mkdir loop); unset ⇒
-  delegates to `snesrecomp_exe_dir_path` unchanged. Only ARTIFACT writers use
-  it: ws_input_log.csv, ws_telemetry.csv, screenshots/ (present ppm + bmp +
-  sidecar), video files, stop-frame dumps. Config/saves/rom.cfg/mods stay
-  exe-anchored (they are game state, not artifacts).
+  recursively-safe via mkdir loop); unset ⇒ delegates to
+  `snesrecomp_exe_dir_path` unchanged. Also
+  `int snesrecomp_artifact_dir(char *out, size_t max_len)` (the dir itself).
+  Only ARTIFACT writers use it: ws_input_log.csv, ws_telemetry.csv,
+  screenshots/ (present ppm + bmp + sidecar), video files, stop-frame dumps.
+  Config/saves/rom.cfg/mods stay exe-anchored (game state, not artifacts).
 - GC7: Every recorded video gets a sidecar `<name>.json` (start wall_ms, start
-  guest frame, width, height, fps, extra/margins at start, build version) and
-  a frame index `<name>.frames.csv` (`present_index,guest_frame,wall_ms`, one
-  row per written frame) so video time maps to exact guest frames.
+  guest frame, width, height, fps_nominal, extra/margins at start, build
+  version) and a frame index `<name>.frames.csv`
+  (`present_index,guest_frame,wall_ms`, one row per written frame) so video
+  time maps to exact guest frames.
 - GC8: On stop (gesture or shutdown while recording): close pipe, wait for
   ffmpeg exit, write a full state dump tagged `rec_stop_<timestamp>` via the
-  existing `snes_state_dump` (VRAM/WRAM/SRAM/regs/OAM/fb) into the artifact
-  dir, toast the file names.
+  existing `snes_state_dump` (VRAM/WRAM/SRAM/regs/OAM) into the artifact dir,
+  toast the file names.
 - GC9: Submodule commit order: snesrecomp first (remote `fork`), then title
   (remote `origin`), branch `local/macos` in all repos. recomp-ui is NOT
   touched by this plan.
 - GC10: No new dependencies. C11 + POSIX (popen, mkdir) only; macOS arm64 is
-  the target; keep the code Windows-tolerant where trivial (`#ifndef _WIN32`
-  around popen paths is acceptable — debug capture may be POSIX-only, but the
-  RELEASE build must still compile on all platforms with the option OFF).
-- GC11: Tests: extend the existing CTest wiring (CMakeLists.txt ~168+). New
-  pure-logic unit tests must run in BOTH option states. Verification of the
-  real recorder uses the headless replay harness pattern
+  the target; keep the code Windows-tolerant where trivial (`#ifdef _WIN32`
+  stubs are acceptable — debug capture may be POSIX-only, but the RELEASE
+  build must still compile on all platforms with the option OFF).
+- GC11: Tests: new pure-logic unit tests are standalone CMake projects under
+  `snesrecomp/tests/host/<name>/` mirroring
+  `snesrecomp/tests/host/video_settings/` (standalone project,
+  `enable_testing()`, include `../../../runner/src`, link runner sources
+  directly). They must build and pass in BOTH option states. Verification of
+  the real recorder uses the headless replay harness pattern
   (tests/run_smw2_widescreen_native.py GameRun: private dir, copied binary,
-  rom.cfg from the user's existing config, SDL dummy video NOT required —
-  the present path runs with the normal cocoa window in a private dir).
+  rom.cfg from the user's existing config).
 
 ## Architecture
 
@@ -89,32 +93,33 @@ file; the design below IS the authority). Owner requirements, verbatim intent:
 
 Files:
 - `snesrecomp/runner/src/host_paths.h` / `host_paths.c`: add
-  `snesrecomp_artifact_path` per GC6. Read the env ONCE (static cache like
-  other host knobs); create the directory on first use (mkdir -p semantics:
-  walk the path creating components; ignore EEXIST). Return 0 only when
-  exe-dir resolution also fails; fall back to bare leaf like existing callers.
+  `snesrecomp_artifact_path` + `snesrecomp_artifact_dir` per GC6. Read the env
+  ONCE (static cache like other host knobs); create the directory on first
+  use (mkdir -p semantics: walk the path creating components; ignore EEXIST).
+  Return 0 only when exe-dir resolution also fails; fall back to bare leaf
+  like existing callers. Provide a test-only
+  `snesrecomp_artifact_path_reset(void)` (clears the static cache; always
+  compiled, 3 lines) so unit tests can switch env between cases.
 - `snesrecomp/runner/src/desktop/host_main.c`:
   - `InputLogOpen` (~5692): default record path via artifact helper
     (explicit `SNESRECOMP_INPUT_RECORD=<path>` still wins verbatim).
-  - Screenshot writers: `RequestScreenshot` path construction (the
-    `screenshots/` relative paths around ~1836-1850 and the GL bmp path in
-    opengl.c `SaveScreenshotBmp` — route BOTH through the helper; the GL side
-    gets the dir via a small setter or by calling the helper directly since
-    opengl.c already includes host_paths.h — verify include, add if missing).
+  - Screenshot writers: the `screenshots/` relative paths around ~1836-1850
+    and the GL bmp path in opengl.c `SaveScreenshotBmp` — route BOTH through
+    the helper (opengl.c: verify host_paths.h include, add if missing).
   - `SNESRECOMP_SCREENSHOT_DIR` explicit env still wins verbatim.
 - `src/smw2_telemetry.c`: `Smw2TelemetryFrame` (~100) default path via helper.
-- Unit test `snesrecomp/runner/tests/host/artifact_path_test.c` (new; wire
-  into the runner's test cmake the way neighboring host tests are wired —
-  inspect `snesrecomp/runner/tests/host/video_settings/` for the pattern):
-  env unset ⇒ equals exe_dir_path result; env set ⇒ joined path + dir
-  created; env set to relative path ⇒ resolved against cwd (abspath helper).
-  Use setenv/unsetenv in the test; no ROM needed.
+- Unit test: new standalone CMake project
+  `snesrecomp/tests/host/artifact_path/` (CMakeLists.txt +
+  artifact_path_test.c) mirroring `snesrecomp/tests/host/video_settings/`.
+  Cases: env unset ⇒ equals exe_dir_path result; env set ⇒ joined path + dir
+  created; env relative ⇒ resolved against cwd. setenv/unsetenv + reset
+  between cases; no ROM needed. Configure+ctest commands in the report.
 
-Acceptance: ctest new test green in build-macos; a headless run with
-SNESRECOMP_ARTIFACT_DIR=/tmp/artprobe + SNESRECOMP_INPUT_RECORD=1 +
-SNESRECOMP_SCREENSHOT=/tmp/... writes ws_input_log.csv under /tmp/artprobe;
-without the env, paths are byte-identical to today (verify by running the
-existing probe script once and diffing log path lines).
+Acceptance: new test green; a headless run with
+SNESRECOMP_ARTIFACT_DIR=/tmp/artprobe + SNESRECOMP_INPUT_RECORD=1 writes
+ws_input_log.csv under /tmp/artprobe; without the env, paths are
+byte-identical to today (run the existing probe script once and diff log
+path lines).
 
 ### Task 2 — gated video recorder module (snesrecomp)
 
@@ -136,40 +141,33 @@ Behavior:
   Task 3). With the flag off, the header provides static-inline no-ops and
   video_rec.c is NOT in the source list (GC2) — mirror how debug_server.h
   stubs at SNESRECOMP_TRACE=0.
-- Start: resolve artifact dir via `snesrecomp_artifact_path("")`-style query
-  (add `snesrecomp_artifact_dir(char*,size_t)` accessor in host_paths if
-  cleaner); names `video_YYYYmmdd_HHMMSS.mp4` (+ `.json`, `.frames.csv` per
-  GC7). Spawn:
+- Start: resolve artifact dir via `snesrecomp_artifact_dir`; names
+  `video_YYYYmmdd_HHMMSS.mp4` (+ `.json`, `.frames.csv` per GC7). Spawn:
   `ffmpeg -hide_banner -loglevel error -f rawvideo -pix_fmt bgr0 -s WxH -r 60 -i pipe:0 -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p -movflags +faststart <path>`
-  via popen("w"). W/H from the FIRST presented frame (window can resize
-  mid-session: if w/h change while active, STOP the current file cleanly and
-  start a new segment with the new size — index/sidecar per segment; simplest
-  correct rule, no scaler).
-- Per present: convert rows to bgr0 byte order is NOT needed — host memory
-  already is B,G,R,X (GC3); fwrite rows directly (pitch may exceed w*4: write
-  row-by-row). Append index row. If fwrite fails (ffmpeg died): stop cleanly,
-  toast "recording stopped (encoder error)", breadcrumb.
-- fps: fixed 60 (guest NTSC ~60.0988; document the 0.16% drift in the sidecar
-  `fps_nominal: 60`); index maps presents→guest frames exactly, so drift is
-  recoverable. Do NOT build a variable-fps muxer (YAGNI).
-- Stop: fflush+pclose (waits), write stop-frame state dump (GC8) — the dump
-  call needs guest state access: video_rec.c lives in the runner and may call
+  via popen("w"). W/H from the FIRST presented frame; if w/h change while
+  active, STOP the current segment cleanly and start a new one (index/sidecar
+  per segment; no scaler).
+- Per present: host memory already is B,G,R,X (GC3); fwrite row-by-row (pitch
+  may exceed w*4). Append index row. If fwrite fails (ffmpeg died): stop
+  cleanly, toast "recording stopped (encoder error)", breadcrumb.
+- fps: fixed 60 (guest NTSC ~60.0988; sidecar `fps_nominal: 60` documents the
+  0.16% drift); index maps presents→guest frames exactly. No variable-fps
+  muxer (YAGNI).
+- Stop: fflush+pclose (waits), write stop-frame state dump (GC8) via
   `snes_state_dump(dir, tag, NULL, 0, 0, 0, frame)` (pixels NULL ⇒ no fb
-  files; the present path already wrote the video) using g_snes/g_ppu externs
-  like state_dump.c does. Toast: "REC stopped: <name> (<N> frames)".
+  files). Toast: "REC stopped: <name> (<N> frames)".
 - Shutdown: if active, stop (same path) so quitting mid-recording finalizes
   the mp4 (faststart) and the dump.
 - Safety: popen/pclose POSIX-only; `#ifdef _WIN32` stubs return unavailable
-  (GC10). No threads. All file writes through artifact helper.
-- Unit test `snesrecomp/runner/tests/host/video_rec_test.c`: compile the
-  module TWICE in the test target — once with the flag off (assert no-ops:
-  VideoRecActive false, Toggle does nothing, Present tolerates NULL) and once
-  with the flag on but ffmpeg forced missing via SNESRECOMP_FFMPEG=/nonexistent
-  (assert Available false, Toggle leaves Active false, no crash). The real
-  encode path is verified in Task 4's integration run, not here.
+  (GC10). No threads. All file writes through artifact helpers.
+- Unit test: standalone CMake project `snesrecomp/tests/host/video_rec/`
+  compiling the module TWICE — flag off (no-ops: Active false, Toggle does
+  nothing, Present tolerates NULL) and flag on with
+  SNESRECOMP_FFMPEG=/nonexistent (Available false, Toggle leaves Active
+  false, no crash). Real encode path verified in Task 4, not here.
 
-Acceptance: both flag states build; unit tests green; release binary size
-delta ≈ 0 (no video_rec.c linked when OFF).
+Acceptance: both flag states build; unit tests green; release binary links
+no video_rec.c when OFF.
 
 ### Task 3 — CMake option + host wiring + gesture (snesrecomp + title)
 
@@ -177,12 +175,12 @@ Files:
 - `snesrecomp/runner/runner.cmake`: `option(SNESRECOMP_ENABLE_VIDEO_CAPTURE
   "Debug-only gameplay video recorder (ffmpeg child process)" OFF)`; when ON:
   `add_compile_definitions(SNESRECOMP_VIDEO_CAPTURE=1)` + append video_rec.c
-  to SNESRECOMP_RUNNER_SOURCES (place next to the TRACE option block ~425).
+  to SNESRECOMP_RUNNER_SOURCES (next to the TRACE option block ~425).
 - `snesrecomp/runner/src/desktop/config.h` + `mmx_config.c`:
   `char record_gesture[64]` in Config; parse `[Controller] RecordGesture`
   (section 7, next to RewindGesture ~612); persist in WriteConfigFile kvs
-  ONLY when non-empty (follow how RewindGesture is written — inspect and
-  mirror; do not add a default line to fresh configs).
+  ONLY when non-empty (mirror how RewindGesture is written; no default line
+  in fresh configs).
 - `snesrecomp/runner/src/desktop/host_main.c`:
   - `static PadGesture g_record_gesture;` configure at ~4056 next to the
     rewind/launcher gestures: fallback "L3+R3", tag "record", key
@@ -192,69 +190,57 @@ Files:
     `if (VideoRecAvailable() && PadGesturePressed(&g_record_gesture) &&
     !snes_rewind_is_open() && !snes_savestate_menu_is_open()) VideoRecToggle();`
     (no `continue` — recording does not freeze the guest).
-  - Present path: call `VideoRecPresent(pixel_buffer, pitch, w, h,
-    g_present_frame)` immediately after the existing SCREENSHOT block
-    (~1850), BEFORE the staged-copy/EndDraw — same buffer WritePpm reads.
+  - Present path: `VideoRecPresent(pixel_buffer, pitch, w, h, g_present_frame)`
+    immediately after the existing SCREENSHOT block (~1850), BEFORE the
+    staged-copy/EndDraw — same buffer WritePpm reads.
   - Startup: `VideoRecConfigure()` near InputLogOpen (~4764). Shutdown:
-    `VideoRecShutdown()` on every exit path after the main loop (find the
-    single cleanup site; if multiple, the one that runs for normal quit).
+    `VideoRecShutdown()` at the normal-quit cleanup site after the main loop.
+  - Test seam (compiled ONLY with the capture flag):
+    `SNESRECOMP_VIDEO_AUTOTEST=<start_frame>,<stop_frame>` — main loop checks
+    once per frame and calls VideoRecToggle at those frames (the gesture
+    needs a physical pad; this is the headless-testable seam).
   - OSD toasts come from video_rec.c via snes_osd_push (already linked).
 - Title `CMakeLists.txt`: nothing required if runner.cmake appends sources
-  before add_executable (verify order; the option block must precede the
-  include at line 37 — it does, options live in runner.cmake which is
-  included at 37 BEFORE add_executable at 39).
+  before add_executable (verify: include at line 37 precedes add_executable
+  at 39).
 
 Acceptance: build-macos reconfigure+build green with option OFF (default);
 `cmake -B build-debug -DSNESRECOMP_ENABLE_VIDEO_CAPTURE=ON` (same generator
-and SDL flags as build-macos — copy the configure line from
-scripts/macos/build-macos.sh minus the perf flags that are irrelevant)
-builds green; ctest green in both caches.
+and SDL flags as build-macos.sh) builds green; ctest green in both caches.
 
 ### Task 4 — debug launcher, build script, integration verification (title)
 
 Files:
 - `scripts/macos/build-debug.sh` (new, executable): mirror build-macos.sh
-  structure but: build dir `build-debug`, add
-  `-DSNESRECOMP_ENABLE_VIDEO_CAPTURE=ON`, keep Release+LTO flags identical
-  (debug refers to the capture feature, not -O0; the recorder must not
-  perturb timing more than necessary). Skip regen if sources unchanged?
-  NO — keep it simple: run the same submodule/patch/regen steps as
-  build-macos.sh (idempotent), then configure+build build-debug.
+  (same submodule/patch/regen steps, idempotent) but build dir `build-debug`
+  and `-DSNESRECOMP_ENABLE_VIDEO_CAPTURE=ON`; keep Release+LTO flags identical
+  (debug = the capture feature, not -O0).
 - `Debug Play.command` (new, repo root, executable, bash): resolve repo root
-  from the script location; export
-  `SNESRECOMP_ARTIFACT_DIR="$repo/artifacts"`, `SNESRECOMP_INPUT_RECORD=1`,
-  `SNESRECOMP_WS_BG_MARGINS_DEBUG=1`; exec
-  `"$repo/build-debug/SuperMarioWorld2YoshisIslandSNESRecomp"`. If the binary
-  is missing, print "run scripts/macos/build-debug.sh first" and exit 1.
-  NOTE: running from repo root means config/saves anchor to repo root
-  (exe-dir anchoring) — the script must copy the user's app config.ini,
-  keybinds.ini, rom.cfg and saves/ into the repo root IF ABSENT (never
-  overwrite), so the debug session plays the user's real settings/save.
-  Document this in the script header.
-- `.gitignore`: add `/artifacts/`, `/build-debug/` is already covered by
-  `/build-*/`; add repo-root `ws_input_log.csv`, `ws_telemetry.csv`,
-  `screenshots/`, `last_run_report.json` (runtime state when run from repo).
-- Integration verification (manual, scripted in the report): launch the
-  build-debug binary headless-style via the replay harness pattern with a
-  recorded input session (reuse /tmp/wsfast/ws_input_log.csv if present,
-  else record a short scripted session), SNESRECOMP_ARTIFACT_DIR=/tmp/vidprobe,
-  and drive VideoRecToggle via a test-only env knob
-  `SNESRECOMP_VIDEO_AUTOTEST=<start_frame>,<stop_frame>` (compiled ONLY with
-  the capture flag; the main loop checks it once per frame and calls Toggle
-  at those frames — this is the testable seam for the gesture path, which
-  needs a physical pad). Verify: mp4 exists and ffprobe reports
-  h264/yuv420p/WxH; frames.csv row count == stop-start presents ±1; sidecar
-  fields present; stop-frame dump files exist; telemetry+input log landed in
-  the artifact dir. Then decode 3 frames with ffmpeg and eyeball via the
-  report (pixel sanity: not black, correct width).
-- Docs: `docs/DEBUG_CAPTURE.md` — how to build, launch, gesture, where
-  artifacts land, how the agent consumes them (frame index → guest frame →
-  telemetry/dump correlation), the autotest knob, and the release-safety
-  guarantees.
+  from script location; export `SNESRECOMP_ARTIFACT_DIR="$repo/artifacts"`,
+  `SNESRECOMP_INPUT_RECORD=1`, `SNESRECOMP_WS_BG_MARGINS_DEBUG=1`; exec
+  `"$repo/build-debug/SuperMarioWorld2YoshisIslandSNESRecomp"`. Missing binary
+  ⇒ print "run scripts/macos/build-debug.sh first", exit 1. Running from repo
+  root anchors config/saves there: copy the user's app config.ini,
+  keybinds.ini, rom.cfg and saves/ into repo root IF ABSENT (never
+  overwrite). Document in the script header.
+- `.gitignore`: add `/artifacts/`; add repo-root `ws_input_log.csv`,
+  `ws_telemetry.csv`, `screenshots/`, `last_run_report.json` (runtime state
+  when run from repo). `/build-*/` already covers build-debug.
+- Integration verification (scripted, evidence in the report): launch the
+  build-debug binary via the replay harness pattern with a recorded input
+  session (reuse /tmp/wsfast/ws_input_log.csv if present, else record a short
+  scripted session), SNESRECOMP_ARTIFACT_DIR=/tmp/vidprobe, drive recording
+  via SNESRECOMP_VIDEO_AUTOTEST. Verify: mp4 exists, ffprobe reports
+  h264/yuv420p/WxH; frames.csv rows == stop-start presents ±1; sidecar fields
+  present; stop-frame dump files exist; telemetry+input log in artifact dir.
+  Decode 3 frames with ffmpeg; pixel sanity (not black, correct width).
+- Docs: `docs/DEBUG_CAPTURE.md` — build, launch, gesture, artifact locations,
+  agent consumption (frame index → guest frame → telemetry/dump), autotest
+  knob, release-safety guarantees.
 
-Acceptance: full integration run green with evidence in the report; release
-build-macos binary unchanged in behavior (probe run path-diff from Task 1
-still clean); Debug Play.command launches and records via autotest knob.
+Acceptance: full integration run green with evidence; release build-macos
+behavior unchanged (Task 1 path-diff still clean); Debug Play.command
+launches and records via autotest knob.
 
 ## Out of scope (documented, not built)
 
