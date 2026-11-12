@@ -36,6 +36,18 @@ static void test_unset_uses_exe_dir(void) {
     CHECK(strcmp(actual, expected) == 0);
 }
 
+static void test_unset_exe_dir_failure_creates_leaf_parents(const char *root) {
+  char actual[2];
+  CHECK(chdir(root) == 0);
+  unsetenv("SNESRECOMP_ARTIFACT_DIR");
+  snesrecomp_artifact_path_reset();
+
+  CHECK(snesrecomp_artifact_path("screenshots/nested/shot.bmp", actual,
+                                 sizeof(actual)) == 0);
+  CHECK(is_dir("screenshots"));
+  CHECK(is_dir("screenshots/nested"));
+}
+
 static void test_env_dir_and_leaf_parents(const char *root) {
   char artifact_dir[2048], expected[2048], actual[2048], ensured[2048];
   snprintf(artifact_dir, sizeof(artifact_dir), "%s/artifacts", root);
@@ -89,6 +101,7 @@ int main(void) {
   }
 
   test_unset_uses_exe_dir();
+  test_unset_exe_dir_failure_creates_leaf_parents(root);
   test_env_dir_and_leaf_parents(root);
   test_relative_dir_uses_cwd(root);
 
@@ -100,6 +113,10 @@ int main(void) {
   snprintf(path, sizeof(path), "%s/relative_artifacts/screenshots", root);
   rmdir(path);
   snprintf(path, sizeof(path), "%s/relative_artifacts", root);
+  rmdir(path);
+  snprintf(path, sizeof(path), "%s/screenshots/nested", root);
+  rmdir(path);
+  snprintf(path, sizeof(path), "%s/screenshots", root);
   rmdir(path);
   snprintf(path, sizeof(path), "%s/artifacts/screenshots/nested", root);
   rmdir(path);
