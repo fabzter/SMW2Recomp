@@ -173,6 +173,15 @@ if(BUILD_TESTING)
       ${SNESRECOMP_ROOT}/runner/src/snes/ws_shadow.c)
   target_include_directories(smw2_ws_test PRIVATE ${SNESRECOMP_ROOT}/runner/src)
   add_test(NAME smw2_ws_addresses COMMAND smw2_ws_test)
+  # Artifact-path policy regressions exercise the real runner path helper.
+  add_executable(artifact_path_test
+      tests/artifact_path_test.c
+      ${SNESRECOMP_ROOT}/runner/src/host_paths.c)
+  target_include_directories(artifact_path_test PRIVATE ${SNESRECOMP_ROOT}/runner/src)
+  target_compile_definitions(artifact_path_test PRIVATE
+      SNESRECOMP_ARTIFACT_PATH_TESTING=1)
+  add_test(NAME artifact_path COMMAND artifact_path_test)
+
   set_tests_properties(smw2_ws_addresses PROPERTIES
       ENVIRONMENT "SNESRECOMP_WS_BG_MARGINS=1;SNESRECOMP_WS_BG_MARGINS_DEBUG=0")
 

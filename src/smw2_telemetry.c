@@ -97,7 +97,7 @@ void Smw2TelemetryFrame(unsigned frame) {
     return;
   if (!s_csv) {
     char path[1024];
-    if (!snesrecomp_exe_dir_path("ws_telemetry.csv", path, sizeof(path)))
+    if (!snesrecomp_artifact_path("ws_telemetry.csv", path, sizeof(path)))
       snprintf(path, sizeof(path), "ws_telemetry.csv");
     s_csv = fopen(path, "a");
     if (!s_csv) {
@@ -109,11 +109,11 @@ void Smw2TelemetryFrame(unsigned frame) {
             SNES_GAME_VERSION);
     if (s_pos == 0)
       fprintf(s_csv,
-            "wall_ms,frame,mode,stage,load_type,exit_rec,cam_x,cam_y,"
-            "hscroll,vscroll,extra,left_cur,right_cur,armed,bg1_active,bg3w,"
-            "westHit,westMiss,eastHit,eastMiss,prefillSeed,prefillRefresh,"
-            "westFold,eastFold,westBlank,eastBlank,westRawFallback,"
-            "eastRawFallback,published,grace,mode7\n");
+              "wall_ms,frame,mode,stage,load_type,exit_rec,cam_x,cam_y,"
+              "hscroll,vscroll,extra,left_cur,right_cur,armed,bg1_active,bg3w,"
+              "westHit,westMiss,eastHit,eastMiss,prefillSeed,prefillRefresh,"
+              "westFold,eastFold,westBlank,eastBlank,westRawFallback,"
+              "eastRawFallback,published,grace,mode7\n");
   }
   TelemetryRow r;
   ReadRow(&r);
