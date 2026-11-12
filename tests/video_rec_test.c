@@ -49,7 +49,17 @@ static unsigned failures;
 
 int main(void) {
   VideoRecConfigure();
+  VideoRecConfigure();
+#if defined(SNESRECOMP_VIDEO_CAPTURE) && SNESRECOMP_VIDEO_CAPTURE
+  unsigned startup_toast_count = s_osd_calls;
+  CHECK(startup_toast_count == 1);
+  CHECK(strstr(s_last_toast, "ffmpeg") != NULL);
+#endif
   CHECK(!VideoRecAvailable());
+#if defined(SNESRECOMP_VIDEO_CAPTURE) && SNESRECOMP_VIDEO_CAPTURE
+  CHECK(s_osd_calls == startup_toast_count);
+  unsigned toast_count_before_toggle = s_osd_calls;
+#endif
   CHECK(!VideoRecActive());
 
   VideoRecToggle();
@@ -59,8 +69,8 @@ int main(void) {
   CHECK(!VideoRecActive());
 
 #if defined(SNESRECOMP_VIDEO_CAPTURE) && SNESRECOMP_VIDEO_CAPTURE
-  CHECK(s_osd_calls > 0);
-  CHECK(strstr(s_last_toast, "ffmpeg") != NULL);
+  CHECK(s_osd_calls == toast_count_before_toggle + 1);
+  CHECK(strcmp(s_last_toast, "recording not started: ffmpeg unavailable") == 0);
   CHECK(s_dump_calls == 0);
 #endif
 
