@@ -150,12 +150,10 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   cave→outdoors transition earlier than 4:3 would; during a fast scroll the
   reveal slides in quickly, which is what reads as "glitchy". Same family
   as N4 (a disclosed widescreen behavior change, not an artifact).
-- Status: no code change shipped. Owner taste decision pending: accept the
-  faithful reveal (recommended), extend the cave edge into the gutter
-  (fabricates terrain — against the exact-source principle), or pillarbox
-  the leading edge. Two fix attempts were made and REVERTED before this
-  classification (see the analysis traps below); the installed build is
-  the faithful one.
+- Status: CLOSED — owner accepted the faithful reveal (2026-11-11). No code
+  change; the margin shows the real cave→outdoors transition. Two fix
+  attempts were made and REVERTED before this classification (see the
+  analysis traps below); the installed build is the faithful one.
 
 ### G5 — Phantom terrain after a chronic stand-down (user session, real play)
 - Symptom: both gutters fill with wrong flat/repeated terrain ("phantom
