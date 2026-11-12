@@ -181,6 +181,26 @@ if(BUILD_TESTING)
   target_compile_definitions(artifact_path_test PRIVATE
       SNESRECOMP_ARTIFACT_PATH_TESTING=1)
   add_test(NAME artifact_path COMMAND artifact_path_test)
+  # Video recorder API behavior in both compile-gate states. The enabled
+  # test uses an unavailable ffmpeg path and never starts a real encoder.
+  add_executable(video_rec_off_test tests/video_rec_test.c)
+  target_include_directories(video_rec_off_test PRIVATE
+      ${SNESRECOMP_ROOT}/runner/src
+      ${SNESRECOMP_ROOT}/runner/src/desktop)
+  add_test(NAME video_rec_off COMMAND video_rec_off_test)
+
+  add_executable(video_rec_on_test
+      tests/video_rec_test.c
+      ${SNESRECOMP_ROOT}/runner/src/desktop/video_rec.c
+      ${SNESRECOMP_ROOT}/runner/src/host_paths.c)
+  target_include_directories(video_rec_on_test PRIVATE
+      ${SNESRECOMP_ROOT}/runner/src
+      ${SNESRECOMP_ROOT}/runner/src/desktop)
+  target_compile_definitions(video_rec_on_test PRIVATE
+      SNESRECOMP_VIDEO_CAPTURE=1)
+  add_test(NAME video_rec_on COMMAND video_rec_on_test)
+  set_tests_properties(video_rec_on PROPERTIES
+      ENVIRONMENT "SNESRECOMP_FFMPEG=/nonexistent")
 
   set_tests_properties(smw2_ws_addresses PROPERTIES
       ENVIRONMENT "SNESRECOMP_WS_BG_MARGINS=1;SNESRECOMP_WS_BG_MARGINS_DEBUG=0")
