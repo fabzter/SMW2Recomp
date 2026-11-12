@@ -132,6 +132,30 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
 ### N4 — Enemies/coins visible in the gutters
 - Widened spawn window working as designed (documented behavior change
   under widescreen, see `docs/WIDESCREEN.md`).
+### N5 — West margin reveals outdoors at the cave edge during fast west scroll
+- Symptom (owner report, recorded session quit at frame 3121, cam x~1973,
+  stage 1 cave, extra=112): scrolling west fast, the west margin shows sky /
+  clouds / outdoor props against the native cave, with a hard vertical edge
+  at the 4:3 boundary; reads as a seam "at the limits of the original box".
+- Evidence (frame-exact replay, dumps 3050-3120): the MAP16 world model
+  decodes the west-margin cells (world tx ~230-243) to the empty tile
+  `0x18ff` at EVERY frame — including frames where the camera was east of
+  them and they were on-screen (cam_x 2169, wtx0=271). The screen-id table
+  (GSU $0CAA) has those screens loaded, and the whole-level MAP16 table
+  (WRAM $7F8000) is populated. So the west is GENUINELY outdoors in the
+  level data; BG1 (cave) is empty there and BG2/BG3 outdoors shows through.
+  The hard edge is the game's authored cave-wall boundary, not a fetch
+  miss, not stale data, not a streaming gap.
+- Classification: native-faithful content. Widescreen reveals the real
+  cave→outdoors transition earlier than 4:3 would; during a fast scroll the
+  reveal slides in quickly, which is what reads as "glitchy". Same family
+  as N4 (a disclosed widescreen behavior change, not an artifact).
+- Status: no code change shipped. Owner taste decision pending: accept the
+  faithful reveal (recommended), extend the cave edge into the gutter
+  (fabricates terrain — against the exact-source principle), or pillarbox
+  the leading edge. Two fix attempts were made and REVERTED before this
+  classification (see the analysis traps below); the installed build is
+  the faithful one.
 
 ### G5 — Phantom terrain after a chronic stand-down (user session, real play)
 - Symptom: both gutters fill with wrong flat/repeated terrain ("phantom
@@ -215,3 +239,23 @@ Frame numbers below are from the canonical fresh-SRAM probe route at
   wall time, never guest frames.
 - Parallel launches of the same workspace race mod-state staging
   ("cannot publish mod state"); serialize or give each run its own dir.
+- Analysis traps that produced two wrong P4/N5 fix attempts (both reverted):
+  - **No west VRAM headroom.** The BG1 rolling window is 64 columns = 32
+    native + 32 EAST-ahead. Reading "live VRAM" for a west-gutter column
+    (buffer col `btx0 + dx`, `dx < 0`) wraps into the east-ahead staged
+    strip and paints a MIRROR of the right side into the left margin. The
+    west margin can only be sourced from the world-keyed store / MAP16,
+    never from live VRAM. An offline audit that "found cave art in the west
+    VRAM" was this wrap, not real data.
+  - **MAP16-empty ≠ missing data.** The whole-level MAP16 table lives in
+    WRAM `$7F8000` (generated at level load); the GSU only converts the
+    visible window to VRAM. A west cell decoding to the empty tile means
+    the level is genuinely empty (outdoors) there — verify across frames
+    where the cell was on-screen before concluding "streaming lag". The
+    screen-id table (GSU `$0CAA`) being loaded does not imply non-empty
+    content.
+  - **Headless screenshot filename collisions.** At ~200 fps, multiple
+    `screenshot` script commands in one run land in the same wall-clock
+    second and overwrite one `present_<time>.ppm`. Capture one wide frame
+    per run via `SNESRECOMP_SCREENSHOT` + `SNESRECOMP_SCREENSHOT_FRAME`
+    with distinct names.
