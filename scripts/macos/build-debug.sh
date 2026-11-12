@@ -2,8 +2,10 @@
 set -euo pipefail
 # This builder assumes the integrated local/macos baseline. Fresh upstream
 # checkouts must run build-macos.sh first; committed local history may have
-# superseded the bootstrap patch stack. Only that all-inapplicable case warns
-# and continues below; partial stacks remain fatal.
+# superseded the bootstrap patch stack. If no patch is forward-applicable, only
+# a fully applied stack is skipped; otherwise superseded history warns and
+# continues. Any forward-applicable patches are attempted in order; an actual
+# application failure is fatal.
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd -- "$script_dir/../.." && pwd)"
@@ -86,9 +88,6 @@ ensure_patches() {
         fi
         echo "  $module: patch stack superseded by committed local/macos history; continuing"
         return 0
-    fi
-    if ((${#pending[@]} != $#)); then
-        die "$module: only ${#pending[@]}/$# patches apply forward -- the submodule is in an inconsistent state; inspect it and refresh patches/"
     fi
     for p in "${pending[@]}"; do
         git -C "$module" apply "$p" || die "failed to apply ${p#"$repo_root"/}"
