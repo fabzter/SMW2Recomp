@@ -8,6 +8,7 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 build_dir="$repo_root/build-debug"
 binary="$build_dir/SuperMarioWorld2YoshisIslandSNESRecomp"
 user_app_dir="$HOME/Applications/Yoshi's Island Recomp.app/Contents/MacOS"
+export SNESRECOMP_FFMPEG="${SNESRECOMP_FFMPEG:-$(command -v ffmpeg || echo /opt/homebrew/bin/ffmpeg)}"
 
 if [[ ! -x "$binary" ]]; then
     printf 'Debug Play: missing debug binary; run scripts/macos/build-debug.sh first\n' >&2
@@ -21,6 +22,9 @@ copy_file_if_absent() {
     fi
 }
 
+if [[ ! -d "$user_app_dir" ]]; then
+    printf "Debug Play: installed-app seed source not found; skipping seed copies (%s)\n" "$user_app_dir" >&2
+fi
 copy_file_if_absent "$user_app_dir/config.ini" "$build_dir/config.ini"
 copy_file_if_absent "$user_app_dir/keybinds.ini" "$build_dir/keybinds.ini"
 copy_file_if_absent "$user_app_dir/rom.cfg" "$build_dir/rom.cfg"

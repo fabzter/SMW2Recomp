@@ -64,6 +64,7 @@ env SNESRECOMP_ARTIFACT_DIR=/tmp/vidprobe \
 
 The input replay selector is zero-based; leave it unset to use the last session by default. `SNESRECOMP_ARTIFACT_DIR` can point a direct binary run at a scratch directory instead of the repository `artifacts/` directory. `Debug Play.command` intentionally fixes its artifact directory to `<repo>/artifacts`.
 
+The pad filter is insurance, not an odd-dimension test: capture width is `256 + 2*extra` (symmetric margins), so it is always even by construction. The odd-width acceptance step cannot exercise odd dimensions; do not rerun it expecting odd input.
 Stopping normally flushes the raw-video pipe with `fflush`/`pclose`; `pclose` waits for ffmpeg and its `+faststart` moov rewrite can take a few hundred milliseconds for a large capture. Wait for normal shutdown to finish before inspecting the MP4. A crash bypasses the `rec_stop_` state dump, but closing the pipe can still let ffmpeg finalize a playable MP4.
 
 ## Release safety and known baseline
