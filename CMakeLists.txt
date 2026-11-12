@@ -187,6 +187,14 @@ if(BUILD_TESTING)
   target_include_directories(video_rec_off_test PRIVATE
       ${SNESRECOMP_ROOT}/runner/src
       ${SNESRECOMP_ROOT}/runner/src/desktop)
+  # runner.cmake's opt-in definition is directory-wide; keep this test on the
+  # header's no-op API even when the game target enables capture.
+  if(MSVC)
+    target_compile_options(video_rec_off_test PRIVATE /USNESRECOMP_VIDEO_CAPTURE)
+  else()
+    target_compile_options(video_rec_off_test PRIVATE -USNESRECOMP_VIDEO_CAPTURE)
+  endif()
+
   add_test(NAME video_rec_off COMMAND video_rec_off_test)
 
   add_executable(video_rec_on_test
