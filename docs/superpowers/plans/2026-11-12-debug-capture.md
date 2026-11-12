@@ -151,9 +151,11 @@ Files:
 Acceptance: `ctest -R artifact_path` green in build-macos; a headless run
 with SNESRECOMP_ARTIFACT_DIR=/tmp/artprobe + SNESRECOMP_INPUT_RECORD=1
 writes ws_input_log.csv under /tmp/artprobe; without the env, paths are
-byte-identical to today — verify with
-`python3 tests/run_smw2_widescreen_native.py --scenario binaries` (LOW-07)
-plus one probe run, diffing the log path lines.
+byte-identical to today — verify with a private-dir probe run (copy
+binary + rom.cfg + config + saves, script 'wait 120 / quit'), diffing the
+ws_input_log.csv location and screenshot path lines against a pre-change
+baseline of the SAME probe. NOT `--scenario binaries`: it pins the
+pre-change release SHA256 and fails by design after any rebuild.
 
 ### Task 2 — gated video recorder module (snesrecomp)
 
